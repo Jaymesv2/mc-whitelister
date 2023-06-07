@@ -1,0 +1,86 @@
+receivers:
+  # metrics/traces
+  otlp:
+    protocols:
+      grpc:
+      http:
+  # logs
+  loki:
+    protocols: 
+      http:
+    use_incoming_timestamp: true
+
+  jaeger:
+    protocols:
+      grpc:
+      thrift_binary:
+      thrift_compact:
+      thrift_http:
+
+  zipkin:
+
+  prometheus:
+    config:
+      scrape_configs:
+      - job_name: 'otel-collector'
+        scrape_interval: 10s
+        static_configs:
+        - targets: ['0.0.0.0:8888']
+
+      - job_name: 'tempo'
+        scrape_interval: 10s
+        static_configs:
+        - targets: ['tempo:3200']
+      #- job_name: 'application'
+      #  scrape_interval: 10s
+      #  static_configs:
+      #  - targets: ['0.0.0.0:8888']
+
+
+processors:
+  batch:
+  attributes:
+    actions:
+      - action: insert
+        key: loki.attribute.labels
+        value: container
+      - action: insert
+        key: loki.format
+        value: raw
+
+exporters:
+  otlp:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  loki: 
+    endpoint: http://loki:3100/loki/api/v1/push
+    tls:
+      insecure: true
+
+  prometheusremotewrite:
+    endpoint: http://prometheus:9090/api/v1/write
+
+  logging:
+    #logLevel: debug
+
+extensions:
+  health_check:
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp, jaeger, zipkin]
+      processors: [batch]
+      exporters: [otlp]
+    logs:
+      receivers: [otlp, loki]
+      processors: [attributes, batch]
+      exporters: [loki, logging]
+    metrics:
+      receivers: [otlp, prometheus]
+      processors: [batch]
+      exporters: [prometheusremotewrite]
+      
+  extensions: [health_check]
