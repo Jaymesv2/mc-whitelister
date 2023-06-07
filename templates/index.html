@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Accounts{% endblock title %}
+
+{% block head %}
+    {{ super() }}
+
+{% endblock head %}
+
+{% block content %}
+<div>
+    <p>{{ user.id }}</p>
+    <p>{{ user.name }}</p>
+</div>
+
+<table>
+    <tr>
+        <th>image</th>
+        <th>ms_id</th>
+    </tr>
+    {% for acc in accounts %}
+    <tr>
+        <th><image href="{# {{ acc.image }} #}"></image></th>
+        <th>{{ acc.microsoft_id }}</th>
+        {#<th>{{ acc.mc_name }}</th>#}
+    </tr>
+    {% endfor %}
+    <tr>
+        <th><a href="/oauth/microsoft">add account</a></th>
+    </tr>
+</table>
+{% endblock content %}

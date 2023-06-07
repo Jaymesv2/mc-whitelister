@@ -1,0 +1,42 @@
+[package]
+name = "mc-whitelister"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = {version = "1", features = ["full"]}
+axum = {version = "0.6", features = ["headers", "macros", "multipart", "tracing", "http2"]}
+rand = {version = "0.8.5", features = ["std", "min_const_gen"]}
+sqlx = {version = "0.6", features = ["runtime-tokio-rustls", "mysql","migrate","macros", "chrono"]}
+
+tracing = "0.1"
+tracing-subscriber = "0.3"
+#opentelemetry =  "0.18.0"
+#opentelemetry-otlp = "0.11.0"
+#opentelemetry-semantic-conventions = "0.10.0"
+tower = "0.4"
+redis = {version = "0.20", features = ["aio", "tokio-comp"]}
+
+tera = "1.19"
+async-session = "3"
+async-redis-session = "0.2"
+axum-sessions = "0.5"
+reqwest = {version = "0.11", features = ["json", "multipart", "rustls-tls", ]}
+oauth2 = "4.3"
+
+
+#openid = { version = "0.12", default-features = false, features = ["rustls", "microsoft"] }
+biscuit = "0.6"
+url = "2.3"
+dotenv = "0.15"
+envy = "0.4"
+serde = "1"
+serde_json = "1"
+chrono = "0.4"
+lazy_static = "1"
+anyhow = "1"
+base64 = "0.21"
+thiserror = "1"
+serde_path_to_error = "0.1"
