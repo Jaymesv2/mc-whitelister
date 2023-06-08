@@ -47,21 +47,24 @@ CREATE TABLE IF NOT EXISTS microsoft_refresh_token (
     FOREIGN KEY (microsoft_id) REFERENCES microsoft_account (microsoft_id)
 );
 
-CREATE TABLE IF NOT EXISTS minecraft_token (
-    microsoft_id varchar(64) PRIMARY KEY NOT NULL,
-    token VARCHAR(255) NOT NULL,
-    expires DATETIME NULL,
-    issued DATETIME NOT NULL,
-    FOREIGN KEY (microsoft_id) REFERENCES microsoft_account (microsoft_id)
-);
-
 CREATE TABLE IF NOT EXISTS minecraft_profile (
     microsoft_id VARCHAR(255) PRIMARY KEY NOT NULL,
+    is_primary BIT NOT NULL,
     uuid VARCHAR(255) NOT NULL,
     username VARCHAR(255) NOT NULL,
     skin_id VARCHAR(255) NOT NULL,
     skin_url VARCHAR(512) NOT NULL,
     skin_variant VARCHAR(255) NOT NULL,
     skin_alias VARCHAR(255) NOT NULL,
+    FOREIGN KEY (microsoft_id) REFERENCES microsoft_account(microsoft_id)
+);
+
+CREATE INDEX minecraft_profile_uuid_index ON minecraft_profile (uuid);
+
+CREATE TABLE IF NOT EXISTS minecraft_token (
+    microsoft_id VARCHAR(255) NOT NULL PRIMARY KEY,
+    token VARCHAR(255) NOT NULL,
+    expires DATETIME NULL,
+    issued DATETIME NOT NULL,
     FOREIGN KEY (microsoft_id) REFERENCES microsoft_account(microsoft_id)
 );

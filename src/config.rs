@@ -11,6 +11,7 @@ pub struct Config {
     pub oauth_token_url: TokenUrl,
     pub oauth_redirect_url: RedirectUrl,
     pub oauth_userinfo_url: Url,
+    pub oauth_logout_url: Url,
     pub oauth_scopes: Vec<String>,
 
     pub user_groups: Vec<String>,

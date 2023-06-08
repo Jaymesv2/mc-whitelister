@@ -46,6 +46,28 @@ pub struct MicrosoftRefreshToken {
     pub expires: Option<NaiveDateTime>,
 }
 
+
+#[derive(Deserialize, Serialize, Debug, FromRow)]
+pub struct MinecraftAccessToken {
+    pub minecraft_uuid: String,
+    pub token: String,
+    pub issued: NaiveDateTime,
+    pub expires: Option<NaiveDateTime>,
+
+}
+
+#[derive(Deserialize, Serialize, Debug, FromRow)]
+pub struct MinecraftProfile {
+    pub microsoft_id: String,
+    pub is_primary: u8,
+    pub uuid: String,
+    pub username: String,
+    pub skin_id: String,
+    pub skin_url: String,
+    pub skin_variant: String,
+    pub skin_alias: String
+}
+
 impl<TT: TokenType> TryFrom<StandardTokenResponse<MicrosoftExtraFields, TT>>
     for MicrosoftRefreshToken
 {
@@ -134,4 +156,9 @@ pub async fn get_ms_refresh_token<'a, E: Executor<'a, Database = DB>>(
     query_as!(MicrosoftRefreshToken, "SELECT * FROM microsoft_refresh_token WHERE microsoft_id = ? AND (expires IS NULL OR expires > (? - 30));", microsoft_id.as_ref(), chrono::Utc::now())
         .fetch_optional(exec)
         .await
+}
+
+
+pub async fn get_minecraft_profiles_from_user_id<'a, E: Executor<'a, Database = DB>>(user_id: String, conn: E) -> Result<Vec<MinecraftProfile>, sqlx::Error> {
+    query_as!(MinecraftProfile, "SELECT * FROM minecraft_profile WHERE microsoft_id = ANY (SELECT microsoft_id FROM microsoft_account WHERE user_id = ?);", user_id).fetch_all(conn).await
 }

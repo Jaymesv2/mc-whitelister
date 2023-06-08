@@ -66,7 +66,7 @@ fn parse_access_token(token: &str) -> Option<TokenInfo> {
     let mut c = std::io::Cursor::new(t);
     match serde_json::from_reader(base64::read::DecoderReader::new(
         &mut c,
-        &base64::engine::general_purpose::STANDARD,
+        &base64::engine::general_purpose::STANDARD_NO_PAD,
     )) {
         Ok(s) => Some(s),
         Err(e) => {
@@ -100,7 +100,13 @@ pub async fn redirect(
         .request_async(async_http_client)
         .await
         .expect("failed to exchange code for tokens");
-    error!("{:?}", token_result.extra_fields());
+
+    //error!("{:?}", token_result.extra_fields());
+
+    /*let Ok(userinfo) = get_user_info(&app_state.config, token_result.access_token()).await else{
+        error!("failed get user info");
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    };*/
 
     let Some(userinfo) = parse_access_token(token_result.access_token().secret()) else {
         error!("failed to parse access token");

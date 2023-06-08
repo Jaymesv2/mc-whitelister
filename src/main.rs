@@ -6,7 +6,7 @@ use tracing::*;
 use axum_sessions::{PersistencePolicy, SameSite, SessionLayer};
 
 use mc_whitelister::{
-    routes::{index::*, microsoft, oauth},
+    routes::{*, index::*,},
     *,
 };
 use rand::Rng;
@@ -93,11 +93,14 @@ async fn main() {
     let app = Router::new()
         .route("/", get(index))
         .route("/login", get(oauth::login))
+        .route("/logout", get(logout::logout))
         .route("/oauth/redirect", get(oauth::redirect))
         //.route("/userinfo", get(oauth::userinfo))
         .route("/oauth/microsoft/redirect", get(microsoft::redirect))
         .route("/oauth/microsoft", get(microsoft::login))
         .route("/update_mc_profile", get(microsoft::update_mc_profile))
+        .route("/accounts/make_primary", post(accounts::make_primary))
+        .route("accounts/delete", post(accounts::delete))
         .layer(session_layer)
         .with_state(state);
 

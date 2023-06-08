@@ -14,7 +14,7 @@ use sqlx::query;
 use sqlx::query_as;
 use std::sync::Arc;
 
-use oauth2::{AuthorizationCode, CsrfToken, PkceCodeChallenge, PkceCodeVerifier, TokenResponse};
+use oauth2::{AuthorizationCode, CsrfToken, PkceCodeChallenge, PkceCodeVerifier};
 
 //type OAuthClient = BasicClient;
 use crate::ms_api::*;
@@ -157,7 +157,7 @@ pub async fn update_mc_profile(
         error!("failed to get db conn");
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     };
-    
+
     let account = match query_as!(MicrosoftAccount, "SELECT * from microsoft_account WHERE user_id = ?;", user_id).fetch_one(&mut conn).await {
         Ok(s) => s,
         Err(e) => {

@@ -11,21 +11,97 @@
     <p>{{ user.id }}</p>
     <p>{{ user.name }}</p>
 </div>
+<style>
+
+table {
+  border-collapse: collapse;
+  border: 2px solid rgb(200,200,200);
+  letter-spacing: 1px;
+  font-size: 0.8rem;
+}
+
+td, th {
+  border: 1px solid rgb(190,190,190);
+  padding: 10px 20px;
+}
+
+th {
+  background-color: rgb(235,235,235);
+}
+
+td {
+  text-align: center;
+}
+
+tr:nth-child(even) td {
+  background-color: rgb(250,250,250);
+}
+
+tr:nth-child(odd) td {
+  background-color: rgb(245,245,245);
+}
+
+caption {
+  padding: 10px;
+}
+</style>
 
 <table>
     <tr>
-        <th>image</th>
-        <th>ms_id</th>
+        <th>name</th>
+        <th>username (currently microsoft_id)</th>
+        <th>is primary</th>
+        <th>remove</th>
     </tr>
     {% for acc in accounts %}
     <tr>
-        <th><image href="{# {{ acc.image }} #}"></image></th>
-        <th>{{ acc.microsoft_id }}</th>
-        {#<th>{{ acc.mc_name }}</th>#}
+        <td><image href="{# {{ acc.image }} #}"></image></td>
+        <td>{{ acc.microsoft_id }}</td>
+        <td><input type="radio" onclick="make_primary_clicked('{{ acc.uuid }}')"/></td>
+        <td><button onclick="remove_account_clicked('{{ acc.uuid }}')">remove</button></td>
+        {#<td>{{ acc.mc_name }}</td>#}
     </tr>
     {% endfor %}
     <tr>
-        <th><a href="/oauth/microsoft">add account</a></th>
+        <td></td>
+        <td><a href="/oauth/microsoft">add account</a></td>
     </tr>
 </table>
+
+<script>
+    function make_primary_clicked(uuid) {
+        console.log(uuid);
+        fetch('/accounts/make_primary', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                uuid: uuid
+            })
+        }).then(response => response.json())
+        .then(data => {
+            console.log(data);
+            Document.location.reload();
+        });
+    } 
+
+    function remove_account_clicked(uuid) {
+        console.log(uuid);
+        fetch('/accounts/remove', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                uuid: uuid
+            })
+        }).then(response => response.json())
+        .then(data => {
+            console.log(data);
+            Document.location.reload();
+        });
+    }
+
+</script>
 {% endblock content %}

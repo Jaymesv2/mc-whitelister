@@ -177,7 +177,7 @@ pub async fn update_mc_profile_from_ms_token(
         .find(|x| x.state == "ACTIVE")
         .unwrap();
     query!(
-        "INSERT INTO minecraft_profile (microsoft_id, uuid, username, skin_id, skin_url, skin_variant, skin_alias) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE uuid=uuid, username=username, skin_id=skin_id,skin_url=skin_url,skin_variant=skin_variant,skin_alias=skin_alias;",
+        "INSERT INTO minecraft_profile (microsoft_id, is_primary, uuid, username, skin_id, skin_url, skin_variant, skin_alias) VALUES (?, TRUE, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE uuid=uuid, username=username, skin_id=skin_id,skin_url=skin_url,skin_variant=skin_variant,skin_alias=skin_alias;",
         microsoft_id,
         mc_profile.id,
         mc_profile.name,
@@ -274,9 +274,7 @@ async fn get_xsts_token(
         status => return Err(XboxApiError::OtherStatus(status)),
     }
 
-    let x = res.json::<models::XBLResponse>().await?;
-    warn!("{x:?}");
-    match x {
+    match res.json::<models::XBLResponse>().await? {
         models::XBLResponse::Success(s) => Ok((s.display_claims.xui[0].uhs.clone(), s.token)),
         models::XBLResponse::Error(e) => Err(XboxApiError::ApiError(e)),
     }
@@ -298,6 +296,7 @@ pub enum MinecraftApiError {
 
     
 }
+
 
 async fn get_minecraft_token(
     user_hash: &str,
@@ -332,6 +331,8 @@ async fn get_minecraft_token(
         models::McResponse::Error(e) => Err(MinecraftApiError::ApiError(e)),
     }
 }
+
+
 
 async fn get_minecraft_profile(
     minecraft_access_token: &str,
