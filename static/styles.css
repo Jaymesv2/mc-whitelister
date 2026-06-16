@@ -1,0 +1,9 @@
+.mc-face {
+  width: 64px;
+  height: 64px;
+
+  background-size: 512px 512px;
+  background-position: -64px -64px;
+
+  image-rendering: pixelated;
+}

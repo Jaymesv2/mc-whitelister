@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO minecraft_profile (microsoft_id, uuid, username, skin_id, skin_url, skin_variant, skin_alias, user_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (microsoft_id) DO UPDATE SET uuid=$2, username=$3, skin_id=$4,skin_url=$5,skin_variant=$6,skin_alias=$7;",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e7ab15977cfcc53e5ec7e8e1f29aa23ab85097ee66117d9496d8cd12dcd126a0"
+}

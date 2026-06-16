@@ -2,3 +2,7 @@
 /db
 .env
 deps/data
+.devenv
+.direnv
+.git
+.vscode

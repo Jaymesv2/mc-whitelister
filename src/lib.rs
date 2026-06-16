@@ -5,12 +5,10 @@ pub mod routes;
 pub mod session;
 pub use config::*;
 
-use sqlx::mysql::MySqlPool;
-use tera::Tera;
+// use sqlx::mysql::MySqlPool;
 
 #[derive(Debug)]
 pub struct AppState {
     pub config: Config,
-    pub pool: MySqlPool,
-    pub tera: Tera,
+    pub pool: sqlx::postgres::PgPool,
 }

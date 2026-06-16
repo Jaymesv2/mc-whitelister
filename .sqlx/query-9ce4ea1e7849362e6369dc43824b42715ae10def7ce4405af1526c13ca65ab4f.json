@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT * FROM minecraft_profile WHERE user_id = $1;",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "uuid",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "microsoft_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "username",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "skin_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "skin_url",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "skin_variant",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "skin_alias",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "9ce4ea1e7849362e6369dc43824b42715ae10def7ce4405af1526c13ca65ab4f"
+}

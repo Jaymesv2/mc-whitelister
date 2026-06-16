@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO user_refresh_token(token, user_id, issued) VALUES ($1, $2, $3) ON CONFLICT (user_id) DO UPDATE SET token=$1, issued=$3;",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Timestamp"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d79b118bfcfdbeee055f6747e39550840900adeda03f8f97e3f52e1a09f5f8a4"
+}
