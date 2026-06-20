@@ -34,17 +34,23 @@
         craneLib = (inputs.crane.mkLib rpkgs).overrideToolchain (p: p.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml);
           # stable.latest.default.override {
           #   targets = [ "wasm32-wasip1" ];
-          # }
-        unfilteredRoot = ./.;
-        src = lib.fileset.toSource {
-            root = unfilteredRoot;
-            fileset = lib.fileset.unions [
-                (craneLib.fileset.commonCargoSources unfilteredRoot)
-                ./migrations
-                ./.sqlx
-                ./static
-            ];
-        };
+          # }\
+
+        # src = lib.fileset.toSource {
+        #     root = unfilteredRoot;
+        #     fileset = lib.fileset.unions [
+        #         (craneLib.fileset.commonCargoSources unfilteredRoot)
+        #         ./migrations
+        #         ./.sqlx
+        #         ./static
+        #         ./luckperms_api
+        #         ./luckperms_reconciler
+        #     ];
+        # };
+
+        src = craneLib.cleanCargoSource ./.;
+
+
         commonArgs = {
             inherit src;
             strictDeps = true;
@@ -53,20 +59,73 @@
             ];
             buildInputs = [];
         };
-
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
-        oauth_bridge = craneLib.buildPackage (commonArgs // {
-            inherit cargoArtifacts;
-            nativeBuildInputs = (commonArgs.nativeBuildInputs or []) ++ [
-                pkgs.sqlx-cli
+        individualCrateArgs = commonArgs // {
+          inherit cargoArtifacts;
+          inherit (craneLib.crateNameFromCargoToml { inherit src; }) version;
+          # NB: we disable tests since we'll run them all via cargo-nextest
+          doCheck = false;
+        };
+
+        unfilteredRoot = ./.;
+
+        fileSetForCrate =
+          crate:
+          lib.fileset.toSource {
+            root = ./.;
+            fileset = lib.fileset.unions [
+              ./Cargo.toml
+              ./Cargo.lock
+              ./migrations
+              ./.sqlx
+              ./static
+              (craneLib.fileset.commonCargoSources ./luckperms_api)
+              (craneLib.fileset.commonCargoSources ./luckperms_reconciler)
+              (craneLib.fileset.commonCargoSources crate)
             ];
-            # preBuild = ''
-            #     export DATABASE_URL=
-            # '';
-        });
+          };
 
 
+        # oauth_bridge = craneLib.buildPackage (commonArgs // {
+        #     inherit cargoArtifacts;
+        #     nativeBuildInputs = (commonArgs.nativeBuildInputs or []) ++ [
+        #         pkgs.sqlx-cli
+        #     ];
+        #     # preBuild = ''
+        #     #     export DATABASE_URL=
+        #     # '';
+        # });
+        oauth_bridge = craneLib.buildPackage (
+          individualCrateArgs
+          // {
+            pname = "oauth_bridge";
+            cargoExtraArgs = "-p oauth-bridge";
+            src = fileSetForCrate ./.;
+          }
+        );
+        luckperms_reconciler = craneLib.buildPackage (
+          individualCrateArgs
+          // {
+            pname = "luckperms_reconciler";
+            cargoExtraArgs = "-p luckperms_reconciler";
+            src = fileSetForCrate ./luckperms_reconciler;
+          }
+        );
+        # oauth_bridge = craneLib.buildPackage (commonArgs // {
+        #     inherit cargoArtifacts;
+        #     nativeBuildInputs = (commonArgs.nativeBuildInputs or []) ++ [
+        #         pkgs.sqlx-cli
+        #     ];
+        #     # preBuild = ''
+        #     #     export DATABASE_URL=
+        #     # '';
+        # });
+
+        luckperms-openapi-spec = pkgs.fetchurl {
+            url = "https://raw.githubusercontent.com/LuckPerms/rest-api/5ca1495e522d11f17d74d823ec32b93a9716460d/src/main/resources/luckperms-openapi.yml";
+            hash = "sha256-N3SrTWxNbbMu5Jy6Oiq7tv0kfnfO205tCZO1mT7wsvU=";
+        };
       in {
         # rust-project.crane.args = {
         #   buildInputs = lib.optionals pkgs.stdenv.isDarwin (
@@ -101,11 +160,15 @@
             sqlx-cli 
             mold 
             openssl
+            tailwindcss_4
+
+            openapi-generator-cli
           ];
 
-          # env = {
-          #   RUSTFLAGS = "-Clink-arg=-fuse-ld=${pkgs.mold}/bin/mold";
-          # };
+          env = {
+            LUCKPERMS_OPENAPI_SPEC = "${luckperms-openapi-spec}";
+            # RUSTFLAGS = "-Clink-arg=-fuse-ld=${pkgs.mold}/bin/mold";
+          };
 
           # Spawn dependencies
           services.postgres = {
@@ -155,10 +218,19 @@
         # };
         
         packages.default = oauth_bridge;
-        packages.container = pkgs.dockerTools.buildImage {
+        packages.oauth_bridge = oauth_bridge;
+        packages.luckperms_reconciler = luckperms_reconciler;
+
+        packages.oauth_bridge_container = pkgs.dockerTools.buildImage {
           name = "oauth-bridge";
           config = {
             Cmd = [ "${oauth_bridge}/bin/oauth-bridge" ];
+          };
+        };
+        packages.luckperms_reconciler_container = pkgs.dockerTools.buildImage {
+          name = "luckperms_reconciler";
+          config = {
+            Cmd = [ "${luckperms_reconciler}/bin/luckperms_reconciler" ];
           };
         };
       };

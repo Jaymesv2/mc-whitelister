@@ -48,36 +48,6 @@ fn with_common(title: &str, content: Markup) -> Markup {
     }
 }
 
-// fn main_script() -> Markup {
-//     let script = r#"
-// // javascript
-// window.onload = function() {
-//
-// }
-//
-// function remove_account_clicked(uuid) {
-//     console.log(uuid);
-//     fetch('/accounts/remove', {
-//         method: 'POST',
-//         headers: {
-//             'Content-Type': 'application/json'
-//         },
-//         body: JSON.stringify({
-//             uuid: uuid
-//         })
-//     }).then(response => response.json())
-//     .then(data => {
-//         console.log(data);
-//         Document.location.reload();
-//     });
-// }
-//         "#;
-//
-//     html!{
-//         script { (script) }
-//     }
-// }
-
 fn main_page(user: User, accs: Vec<Account>) -> Markup {
     with_common(
         "Accounts",
@@ -112,34 +82,6 @@ fn main_page(user: User, accs: Vec<Account>) -> Markup {
                     h1 { "Steam accounts" }
                 }
             }
-
-
-            /*table ."table-auto" ."border-collapse" ."border" ."border-gray-400"  {
-                tr {
-                    th ."border" ."border-gray-300" { "username" }
-                    th ."border" ."border-gray-300" { "remove" }
-                }
-                @for acc in accs {
-                    tr id=(format!("{}-row", acc.uuid)) uuid=(acc.uuid) {
-                        td ."border" ."border-gray-300" {
-                            div ."mc-face" style=(format!("background-image: url('{}')", acc.skin_url)) {
-                            }
-
-                        }
-                        td ."border" ."border-gray-300" { (acc.username) }
-                        td ."border" ."border-gray-300" {
-                            button hx-post=(format!("/remove/{}", acc.uuid)) hx-target=(format!("#{}-row", acc.uuid)) hx-swap="outerHTML" { "Remove" }
-                        }
-                    }
-                }
-                tr {
-                    td ."border" ."border-gray-300" {}
-                    td ."border" ."border-gray-300" {
-                        a href="/oauth/microsoft" { "add account" }
-                    }
-                }
-            }*/
-            /*(main_script())*/
             script src="/static/scripts.js" {}
         },
     )

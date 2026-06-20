@@ -49,11 +49,8 @@ async fn main() {
     sqlx::migrate!()
         .run(&pool)
         .await
-        .expect("failed to run migrations");
+        .expect("failed to run database migrations");
 
-    // let bind_addr = config.bind_addr;
-
-    //let store = MemoryStore::new();
     let secret = if let Some(s) = &config.session_secret {
         use base64::{Engine as _, engine::general_purpose};
         // base64::Engine::de
@@ -69,18 +66,11 @@ async fn main() {
         l
     };
 
-    // use axum_session::{SessionConfig, SessionStore, SessionLayer, Key};
-    // use axum_session_sqlx::*;
-    //
-    // let session_config = SessionConfig::default()
-    //     .with_table_name("sessions")
-    //     .with_key(Key::from(&secret));
-    // let session_store = SessionStore::<SessionPgPool>::new(Some(pool.clone().into()), session_config).await.expect("failed to make session store");
     let session_store = PostgresStore::new(pool.clone());
     session_store
         .migrate()
         .await
-        .expect("failed to apply migrations");
+        .expect("failed to apply session store migrations");
 
     let deletion_task = tokio::task::spawn(
         session_store
