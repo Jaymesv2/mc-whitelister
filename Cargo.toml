@@ -14,7 +14,7 @@ members = ["luckperms_api"]
 tokio = {version = "1", features = ["full"]}
 axum = {version = "0.8", features = ["macros", "multipart", "tracing", "http2"]}
 rand = {version = "0.10", features = ["std"]}
-sqlx = {version = "0.8", features = ["runtime-tokio-rustls", "postgres","migrate","macros", "chrono"]}
+sqlx = {version = "0.8", features = ["runtime-tokio-rustls", "postgres","migrate","macros", "chrono", "uuid"]}
 
 tracing = "0.1"
 tracing-subscriber = {version = "0.3", features = ["env-filter"]}
@@ -40,7 +40,7 @@ authentik-client = "2026.2.1"
 # async-sqlx-sessions = {version = "0.4", features = ["pg"]}
 # async-redis-session = "0.2"
 # axum-sessions = "0.6"
-reqwest = {version = "0.12", default-features = false, features = [ "charset", "http2", "system-proxy", "json", "multipart", "rustls-tls" ]}
+reqwest = {version = "0.12", default-features = false, features = [ "charset",  "http2", "system-proxy", "json", "multipart", "rustls-tls" ]}
 oauth2 = {version = "5.0", features = ["reqwest", "rustls-tls"]}
 
 

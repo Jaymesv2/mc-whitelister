@@ -1,79 +1,36 @@
 use serde::*;
 use std::collections::HashSet;
 use tracing::*;
+use crate::AppState;
 
 use luckperms_api::apis::{users_api, groups_api};
 
 use authentik_client::apis::core_api;
 use std::collections::HashMap;
 use std::sync::Arc;
+use axum::http::StatusCode;
+use uuid::Uuid;
 
 
-#[derive(Debug, Deserialize)]
-struct Config {
-    // authentik api
-    pub authentik_api_key: String,
-    pub authentik_user: String,
-    pub authentik_server: String,
-    // luckperms rest api
-    pub luckperms_server: String,
-    pub luckperms_api_key: String,
-
-    pub oauth_bridge_endpoint: String,
-    pub oauth_bridge_token: String
-    // luckperms api
-
-
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Account {
+    uuid: String,
+    username: String,
+    user_id: String
 }
 
-#[derive(Clone)]
-struct AppState {
-    pub luckperms: luckperms_api::apis::configuration::Configuration,
-    pub authentik: authentik_client::apis::configuration::Configuration,
-    pub oauth_bridge_endpoint: String,
-    pub oauth_bridge_token: String
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResponseAccount {
+    uuid: Uuid,
+    username: String
 }
 
-// #[tokio::main]
-// async fn main() {
-//     dotenvy::dotenv().unwrap();
-//
-//     use tracing_subscriber::{EnvFilter, fmt, prelude::*};
-//
-//     tracing_subscriber::registry()
-//         .with(fmt::layer().with_file(true).with_line_number(true))
-//         .with(EnvFilter::from_default_env())
-//         .init();
-//
-//     let config: Config = match envy::from_env::<Config>() {
-//         Ok(config) => config,
-//         Err(error) => panic!("{:#?}", error),
-//     };
-//
-//     let state = AppState {
-//         luckperms: {
-//             let mut cfg = luckperms_api::apis::configuration::Configuration::new();
-//             cfg.bearer_access_token = Some(config.luckperms_api_key);
-//             cfg.base_path = config.luckperms_server;
-//             // cfg.client = client.clone();
-//             cfg
-//         },
-//         authentik: {
-//             let mut cfg = authentik_client::apis::configuration::Configuration::new();
-//             cfg.bearer_access_token = Some(config.authentik_api_key);
-//             cfg.base_path = config.authentik_server;
-//             cfg
-//         },
-//         oauth_bridge_endpoint: config.oauth_bridge_endpoint,
-//         oauth_bridge_token: config.oauth_bridge_token
-//     };
-//
-//     reconcile_luckperms(&state).await;
-// }
+pub async fn reconcile_luckperms(state: &Arc<AppState>) -> Result<(),()> {
+    let Ok(mut conn) = state.pool.acquire().await else {
+        error!("failed to aquire db connection");
+        panic!("lazy");
+    };
 
-
-
-async fn reconcile_luckperms(state: &AppState) -> Result<(),()> {
     let agroups: Vec<AuthentikGroup> = get_authentik_groups(&state).await.expect("failed to get authentik groups");
     let lgroups = groups_api::get_groups(&state.luckperms).await.expect("failed to get luckperms groups");
     
@@ -91,7 +48,6 @@ async fn reconcile_luckperms(state: &AppState) -> Result<(),()> {
     let luckperms_group_names: HashSet<&String> = agroups.iter().map(|x| &x.data.name).collect();
 
     // ensure all of the groups exist
-    //
     // I think this is O(n^2) but i'm too lazy to make it O(n*log(n))
     for agroup in &agroups {
         if lgroups.iter().find(|x| **x == agroup.data.name).is_none() {
@@ -106,26 +62,36 @@ async fn reconcile_luckperms(state: &AppState) -> Result<(),()> {
         groups_api::set_group_nodes(&state.luckperms, &agroup.data.name, Some(agroup.data.clone().into())).await.expect("failed to set group nodes");
     }
 
-    let client = reqwest::Client::new();
+    let accounts: Vec<Account> = match sqlx::query_as!(
+            Account,
+            "SELECT user_id, username, uuid FROM minecraft_profile"
+        )
+        .fetch_all(&mut *conn)
+        .await {
+            Ok(s) => s,
+            Err(e) => {
+                error!("Failed to get user accounts: {e:?}");
+                todo!("lazy")
+                // return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        };
 
-    let authentik_uid_uuid_mapping: HashMap<String,Vec<ResponseAccount>> = client
-        .get(&state.oauth_bridge_endpoint)
-        .header("Authorization", format!("Bearer: {}", state.oauth_bridge_token) )
-        .send()
-        .await
-        .expect("failed to sent http req")
-        .json()
-        .await
-        .expect("failed to deserialize json");
-    
+    let mut authentik_uid_uuid_mapping: HashMap<String, Vec<ResponseAccount>> = HashMap::new();
+    for i in accounts {
+
+        if let Ok(iuuid) = Uuid::parse_str(&i.uuid) {
+            authentik_uid_uuid_mapping.entry(i.user_id).or_insert( vec![] ).push(ResponseAccount {
+                uuid: iuuid,
+                username: i.username
+            });
+        } else {
+            warn!("acount {} has an invalid uuid in the database", i.username)
+        }
+    }
+
     
     error!("{authentik_uid_uuid_mapping:?}");
 
-    #[derive(Debug, Clone, Deserialize)]
-    struct ResponseAccount {
-        uuid: Uuid,
-        username: String
-    }
     use uuid::Uuid;
 
     let luckperms_users: Vec<Uuid> = users_api::get_users(&state.luckperms).await.expect("failed to get luckperms users");
@@ -139,8 +105,8 @@ async fn reconcile_luckperms(state: &AppState) -> Result<(),()> {
 
     info!("created luckperms users");
  
-    // for each 
-    for (auid, account) in authentik_uid_uuid_mapping.iter().flat_map(|(uid, v)| v.iter().map(move |x| (uid, x))) {
+    // you have to collect this iter because the flatmap function can't be persisted across awaits :(
+    for (auid, account) in authentik_uid_uuid_mapping.iter().flat_map(|(uid, v)| v.iter().map(move |x| (uid, x))).collect::<Vec<_>>() {
         let user_uuid: String = format!("{}", account.uuid.hyphenated());
         let user_data = users_api::get_user(&state.luckperms, &user_uuid ).await.expect("failed to get user data");
 
@@ -191,7 +157,7 @@ struct AuthentikGroup {
     data: AuthentikLuckpermsGroupAttribute 
 }
 
-async fn get_authentik_groups(state: &AppState) -> Result<Vec<AuthentikGroup>, authentik_client::apis::Error<authentik_client::apis::core_api::CoreGroupsListError>> {
+async fn get_authentik_groups(state: &Arc<AppState>) -> Result<Vec<AuthentikGroup>, authentik_client::apis::Error<authentik_client::apis::core_api::CoreGroupsListError>> {
     let authentik_groups_req = core_api::core_groups_list(&state.authentik, 
         None,
         None,
@@ -243,10 +209,6 @@ struct AuthentikMinecraftAccount {
     last_updated: Option<String>,
 }
 
-
-
-
-
 #[derive(Debug, Clone, Deserialize)]
 struct AuthentikLuckpermsGroupAttribute {
     name: String,
@@ -270,9 +232,6 @@ impl Into<Vec<luckperms_api::models::new_node::NewNode>> for AuthentikLuckpermsG
         ).collect()
     }
 }
-
-
-
 
 #[derive(Debug, Clone, Deserialize)]
 struct AuthentikLuckpermsNode {

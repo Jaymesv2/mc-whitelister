@@ -12,4 +12,6 @@ pub use config::*;
 pub struct AppState {
     pub config: Config,
     pub pool: sqlx::postgres::PgPool,
+    pub luckperms: luckperms_api::apis::configuration::Configuration,
+    pub authentik: authentik_client::apis::configuration::Configuration,
 }

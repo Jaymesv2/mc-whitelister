@@ -1361,20 +1361,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "luckperms_reconciler"
-version = "0.1.0"
-dependencies = [
- "dotenvy",
- "envy",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "matchers"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2630,6 +2616,7 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "url",
+ "uuid",
  "webpki-roots 0.26.11",
 ]
 
@@ -2712,6 +2699,7 @@ dependencies = [
  "thiserror 2.0.18",
  "time",
  "tracing",
+ "uuid",
  "whoami",
 ]
 
@@ -2751,6 +2739,7 @@ dependencies = [
  "thiserror 2.0.18",
  "time",
  "tracing",
+ "uuid",
  "whoami",
 ]
 
@@ -2778,6 +2767,7 @@ dependencies = [
  "time",
  "tracing",
  "url",
+ "uuid",
 ]
 
 [[package]]

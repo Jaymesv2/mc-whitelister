@@ -7,7 +7,7 @@ use tower_sessions::{
 use tracing::*;
 
 use oauth_bridge::{
-    routes::{index::*, *},
+    routes::{self, index::*},
     *,
 };
 use rand::Rng;
@@ -45,6 +45,9 @@ async fn main() {
     )
     .await
     .expect("failed to connect to database");
+
+    // let state = AppState {
+    // };
 
     sqlx::migrate!()
         .run(&pool)
@@ -86,7 +89,22 @@ async fn main() {
 
     // .with_expiry(Expiry::OnInactivity(Duration::hours(24)));
 
-    let state = Arc::new(AppState { config, pool });
+    let state = Arc::new(AppState { 
+        luckperms: {
+            let mut cfg = luckperms_api::apis::configuration::Configuration::new();
+            cfg.bearer_access_token = Some(config.luckperms_api_key.clone());
+            cfg.base_path = config.luckperms_server.clone();
+            cfg
+        },
+        authentik: {
+            let mut cfg = authentik_client::apis::configuration::Configuration::new();
+            cfg.bearer_access_token = Some(config.authentik_api_key.clone());
+            cfg.base_path = config.authentik_server.clone();
+            cfg
+        },
+        config, 
+        pool, 
+    });
 
     // includes the file in the binary on release but reads from fs in debug
     macro_rules! static_route {
@@ -115,13 +133,16 @@ async fn main() {
 
     let app = Router::new()
         .route("/", get(index))
-        .route("/login", get(oauth::login))
-        .route("/logout", get(logout::logout))
-        .route("/oauth/redirect", get(oauth::redirect))
-        .route("/oauth/microsoft/redirect", get(microsoft::redirect))
-        .route("/oauth/microsoft", get(microsoft::login))
-        .route("/remove/{uuid}", post(accounts::remove))
-        .route("/health", get(health::health))
+        .route("/login", get(routes::oauth::login))
+        .route("/logout", get(routes::logout::logout))
+        .route("/oauth/redirect", get(routes::oauth::redirect))
+        .route("/oauth/microsoft/redirect", get(routes::microsoft::redirect))
+        .route("/oauth/microsoft", get(routes::microsoft::login))
+        .route("/remove/{uuid}", post(routes::accounts::remove))
+        .route("/health", get(routes::health::health))
+
+        .route("/reconcile", get(routes::reconcile::reconcile))
+
         .nest("/static", static_router)
         .layer(session_layer)
         .with_state(state);
