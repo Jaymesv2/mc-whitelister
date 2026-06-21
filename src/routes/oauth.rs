@@ -164,6 +164,7 @@ pub async fn redirect(
         error!("access token didn't contain subject");
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     };
+
     let Some(username) = token_contents.private.name else {
         error!("access token didn't contain name");
         return Err(StatusCode::INTERNAL_SERVER_ERROR);

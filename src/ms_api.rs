@@ -221,6 +221,9 @@ pub enum MinecraftApiError {
     UnexpectedStatus(StatusCode),
     #[error("Api Error")]
     ApiError(models::McResponseError),
+
+    #[error("No Associated Minecraft Account")]
+    NoAssociatedMinecraftAccount,
 }
 
 async fn get_minecraft_token(
@@ -277,7 +280,10 @@ async fn get_minecraft_profile(
             return Err(MinecraftApiError::Forbidden {
                 body: res.text().await?,
             });
-        }
+        },
+        StatusCode::NOT_FOUND => {
+            return Err(MinecraftApiError::NoAssociatedMinecraftAccount);
+        },
         status => return Err(MinecraftApiError::UnexpectedStatus(status)),
     }
 

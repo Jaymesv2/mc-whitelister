@@ -124,7 +124,7 @@ pub async fn redirect(
     struct MsClaims {}
     let contents: biscuit::JWT<MsClaims, MsClaims> =
         biscuit::JWT::new_encoded(&token.extra_fields().id_token);
-    error!("{}", token.extra_fields().id_token);
+
     let id_contents: biscuit::ClaimsSet<MsClaims> = contents.unverified_payload().unwrap(); // bad
     let sub = id_contents
         .registered
@@ -147,7 +147,8 @@ pub async fn redirect(
         &http_client,
     )
     .await
-    .expect("failed to update pr");
+    .expect("failed to update minecraft profile");
+
 
     if let Err(e) = tx.commit().await {
         error!("Failed to commit to database: {e:?}");
@@ -166,6 +167,7 @@ pub async fn redirect(
         .remove::<MSOAuthExchangeData>(MSOAuthExchangeData::SESSION_KEY)
         .await
         .expect("failed to remove ms oauth exchange data from session");
+
     Ok(response::Redirect::to("/").into_response())
 }
 
