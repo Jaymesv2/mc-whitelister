@@ -121,7 +121,7 @@ async fn main() {
         .route("/oauth/microsoft/redirect", get(microsoft::redirect))
         .route("/oauth/microsoft", get(microsoft::login))
         .route("/remove/{uuid}", post(accounts::remove))
-        .route("/all_users", get(all_users::all_users))
+        .route("/health", get(health::health))
         .nest("/static", static_router)
         .layer(session_layer)
         .with_state(state);

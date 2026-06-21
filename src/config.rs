@@ -20,8 +20,6 @@ pub struct Config {
     pub msgraph_client_id: ClientId,
     pub msgraph_client_secret: ClientSecret,
 
-    pub reconciler_api_key: String,
-
     pub db_host: String,
     pub db_port: u16,
     pub db_user: String,
