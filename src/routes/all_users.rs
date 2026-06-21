@@ -10,13 +10,21 @@ use serde::*;
 #[derive(Debug, Clone, Serialize)]
 struct Account {
     uuid: String,
+    username: String,
     user_id: String
 }
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ResponseAccount {
+    uuid: String,
+    username: String
+}
+
 
 pub async fn all_users(
     headers: HeaderMap,
     State(state): State<Arc<AppState>>
-) -> Result<Json<HashMap<String,Vec<String>>>, StatusCode> {
+) -> Result<Json<HashMap<String,Vec<ResponseAccount>>>, StatusCode> {
     // peak auth logic going on here
 
     // only ascii auth headers, i dont want to deal with random bytes
@@ -36,7 +44,7 @@ pub async fn all_users(
 
     let accounts: Vec<Account> = match sqlx::query_as!(
             Account,
-            "SELECT user_id, uuid FROM minecraft_profile"
+            "SELECT user_id, username, uuid FROM minecraft_profile"
         )
         .fetch_all(&mut *conn)
         .await {
@@ -46,9 +54,12 @@ pub async fn all_users(
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         };
-    let mut resp: HashMap<String, Vec<String>> = HashMap::new();
+    let mut resp: HashMap<String, Vec<ResponseAccount>> = HashMap::new();
     for i in accounts {
-        resp.entry(i.user_id).or_insert( vec![] ).push(i.uuid);
+        resp.entry(i.user_id).or_insert( vec![] ).push(ResponseAccount {
+            uuid: i.uuid,
+            username: i.username
+        });
     }
 
     Ok(Json(resp))
