@@ -1364,10 +1364,8 @@ dependencies = [
 name = "luckperms_reconciler"
 version = "0.1.0"
 dependencies = [
- "authentik-client",
  "dotenvy",
  "envy",
- "luckperms_api",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
@@ -1566,11 +1564,13 @@ name = "oauth-bridge"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "authentik-client",
  "axum",
  "base64",
  "biscuit",
  "dotenvy",
  "envy",
+ "luckperms_api",
  "maud",
  "oauth2",
  "rand 0.10.1",
@@ -1588,6 +1588,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "uuid",
 ]
 
 [[package]]

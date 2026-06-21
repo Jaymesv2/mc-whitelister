@@ -32,6 +32,8 @@ tower-sessions = {version = "0.14", features = ["signed"]}
 tower-sessions-sqlx-store = {version = "0.15", features = ["postgres"]}
 
 
+luckperms_api = {path = "./luckperms_api", default-features = false, features = ["rustls"]}
+authentik-client = "2026.2.1"
 
 # axum_session = { version = "0.19" }
 # axum_session_sqlx = {version = "0.8", features = ["postgres", "tls-rustls"]}
@@ -42,6 +44,7 @@ reqwest = {version = "0.12", default-features = false, features = [ "charset", "
 oauth2 = {version = "5.0", features = ["reqwest", "rustls-tls"]}
 
 
+uuid = "1.23.3"
 #openid = { version = "0.12", default-features = false, features = ["rustls", "microsoft"] }
 biscuit = "0.8"
 url = "2"

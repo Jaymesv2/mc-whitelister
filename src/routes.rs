@@ -4,3 +4,4 @@ pub mod logout;
 pub mod microsoft;
 pub mod oauth;
 pub mod health;
+pub mod reconcile;
