@@ -25,6 +25,13 @@ pub struct ResponseAccount {
     username: String
 }
 
+// #[derive(Debug,Clone)]
+// enum ReconcileErrors {
+//     
+// }
+
+
+
 pub async fn reconcile_luckperms(state: &Arc<AppState>) -> Result<(),()> {
     let Ok(mut conn) = state.pool.acquire().await else {
         error!("failed to aquire db connection");
@@ -34,6 +41,8 @@ pub async fn reconcile_luckperms(state: &Arc<AppState>) -> Result<(),()> {
     let agroups: Vec<AuthentikGroup> = get_authentik_groups(&state).await.expect("failed to get authentik groups");
     let lgroups = groups_api::get_groups(&state.luckperms).await.expect("failed to get luckperms groups");
     
+    let luckperms_group_names: HashSet<&String> = agroups.iter().map(|x| &x.data.name).collect();
+
     // maps users to a list of groups
     let user_auid_lp_groups: HashMap<&String, Vec<&String>> = {
         let mut acc = HashMap::new();
@@ -45,7 +54,6 @@ pub async fn reconcile_luckperms(state: &Arc<AppState>) -> Result<(),()> {
         acc
     };
 
-    let luckperms_group_names: HashSet<&String> = agroups.iter().map(|x| &x.data.name).collect();
 
     // ensure all of the groups exist
     // I think this is O(n^2) but i'm too lazy to make it O(n*log(n))
@@ -95,18 +103,16 @@ pub async fn reconcile_luckperms(state: &Arc<AppState>) -> Result<(),()> {
     use uuid::Uuid;
 
     let luckperms_users: Vec<Uuid> = users_api::get_users(&state.luckperms).await.expect("failed to get luckperms users");
-    
-    for account in authentik_uid_uuid_mapping.values().flat_map(|x| x.iter()) {
+
+    info!("created luckperms users");
+
+    // you have to collect this iter because the flatmap function can't be persisted across awaits :(
+    for (auid, account) in authentik_uid_uuid_mapping.iter().flat_map(|(uid, v)| v.iter().map(move |x| (uid, x))).collect::<Vec<_>>() {
         if luckperms_users.iter().find(|uuid| account.uuid == **uuid).is_none() {
             info!("creating user \"{}\" with uuid \"{}\" in luckperms", account.username, account.uuid);
             users_api::create_user(&state.luckperms, Some(luckperms_api::models::new_user::NewUser::new(account.uuid, account.username.clone())) ).await.expect("failed to create luckperms user");
         }
-    }
 
-    info!("created luckperms users");
- 
-    // you have to collect this iter because the flatmap function can't be persisted across awaits :(
-    for (auid, account) in authentik_uid_uuid_mapping.iter().flat_map(|(uid, v)| v.iter().map(move |x| (uid, x))).collect::<Vec<_>>() {
         let user_uuid: String = format!("{}", account.uuid.hyphenated());
         let user_data = users_api::get_user(&state.luckperms, &user_uuid ).await.expect("failed to get user data");
 
