@@ -91,7 +91,7 @@ pub enum ReconcileErrors {
 pub async fn reconcile_luckperms(state: &Arc<AppState>) -> Result<(),ReconcileErrors> {
     let mut conn = state.pool.acquire().await?;
 
-    let agroups: Vec<AuthentikGroup> = get_authentik_groups(&state).await?;//.unwrap();
+    let agroups: Vec<AuthentikGroup> = get_authentik_groups(state).await?;//.unwrap();
     let lgroups = groups_api::get_groups(&state.luckperms).await?;//.unwrap();
     
     let luckperms_group_names: HashSet<&String> = agroups.iter().map(|x| &x.data.name).collect();
@@ -167,9 +167,9 @@ pub async fn reconcile_luckperms(state: &Arc<AppState>) -> Result<(),ReconcileEr
         // If they have a group in authentik but not in luckperms then it should be added.
         // Any other groups should be ignored.
     
-        let user_groups = user_data.parent_groups.unwrap_or_else(|| vec![]);
+        let user_groups = user_data.parent_groups.unwrap_or_else(Vec::new);
         let empty = vec![];
-        let expected_groups = user_auid_lp_groups.get(auid).unwrap_or_else(|| &empty );
+        let expected_groups = user_auid_lp_groups.get(auid).unwrap_or(&empty );
         info!("expecting {} to have groups: {:?}", account.username, expected_groups);
 
         let to_remove: Vec<&String> = user_groups.iter().filter(|gname| 
@@ -184,7 +184,7 @@ pub async fn reconcile_luckperms(state: &Arc<AppState>) -> Result<(),ReconcileEr
         }
 
         let to_add: Vec<&String> = expected_groups.iter().filter(|gname| 
-             luckperms_group_names.contains(*gname) && !user_groups.iter().find(|n| n == *gname).is_some() 
+             luckperms_group_names.contains(*gname) && user_groups.iter().find(|n| n == *gname).is_none()
         ).copied().collect();
 
         if !to_add.is_empty() {
@@ -242,7 +242,7 @@ async fn get_authentik_groups(state: &Arc<AppState>) -> Result<Vec<AuthentikGrou
         };
         Some(AuthentikGroup{ 
             name: group.name,
-            member_authentik_uids: group.users_obj.unwrap_or_else(|| vec![]).into_iter().map(|x| x.uid).collect(),
+            member_authentik_uids: group.users_obj.unwrap_or_else(Vec::new).into_iter().map(|x| x.uid).collect(),
             data: luckperms_data
         })
     }).collect())

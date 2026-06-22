@@ -46,9 +46,6 @@ async fn main() {
     .await
     .expect("failed to connect to database");
 
-    // let state = AppState {
-    // };
-
     sqlx::migrate!()
         .run(&pool)
         .await
@@ -56,11 +53,9 @@ async fn main() {
 
     let secret = if let Some(s) = &config.session_secret {
         use base64::{Engine as _, engine::general_purpose};
-        // base64::Engine::de
         general_purpose::STANDARD
             .decode(s)
             .expect("failed to decode secret")
-        // s.as_bytes()
     } else {
         warn!("using random session secret");
         // This value lives the entire lifetime of the program so its fine to leak it.
@@ -86,8 +81,6 @@ async fn main() {
         .with_name("sid")
         .with_same_site(SameSite::None)
         .with_signed(Key::from(secret.as_slice()));
-
-    // .with_expiry(Expiry::OnInactivity(Duration::hours(24)));
 
     let state = Arc::new(AppState { 
         luckperms: {
@@ -141,8 +134,8 @@ async fn main() {
         .route("/remove/{uuid}", post(routes::accounts::remove))
         .route("/health", get(routes::health::health))
 
+        .route("/reconcile/{id}", post(routes::reconcile::reconcile))
         .route("/reconcile", get(routes::reconcile::reconcile))
-        .route("/reconcile", post(routes::reconcile::reconcile))
 
         .nest("/static", static_router)
         .layer(session_layer)

@@ -4,7 +4,6 @@ use axum::{
     response::{self, IntoResponse, Redirect, Response},
 };
 
-// use axum_sessions::extractors::{ReadableSession, WritableSession};
 use crate::session::*;
 use reqwest::StatusCode;
 use tower_sessions::Session;
@@ -19,8 +18,6 @@ use oauth2::{
     reqwest,
 };
 
-//type OAuthClient = BasicClient;
-//
 
 use crate::ms_api::*;
 

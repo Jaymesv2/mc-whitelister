@@ -33,6 +33,7 @@ pub struct Config {
     pub session_secret: Option<String>,
 
     pub bind_addr: SocketAddr,
+    pub reconcile_webhook_key: String,
 
 
 
