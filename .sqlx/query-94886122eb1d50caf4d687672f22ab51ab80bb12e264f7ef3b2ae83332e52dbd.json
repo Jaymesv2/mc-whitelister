@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT user_id, uuid FROM minecraft_profile",
+  "query": "SELECT user_id, username, uuid FROM minecraft_profile",
   "describe": {
     "columns": [
       {
@@ -10,6 +10,11 @@
       },
       {
         "ordinal": 1,
+        "name": "username",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
         "name": "uuid",
         "type_info": "Varchar"
       }
@@ -19,8 +24,9 @@
     },
     "nullable": [
       false,
+      false,
       false
     ]
   },
-  "hash": "6ff773c5a25cf5a92fff390f4e911fab8a063cc0fc18198c24f01fd18952cdab"
+  "hash": "94886122eb1d50caf4d687672f22ab51ab80bb12e264f7ef3b2ae83332e52dbd"
 }
