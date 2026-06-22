@@ -1,14 +1,14 @@
 use axum::http::header::HeaderMap;
 
+use axum::http::header::HeaderValue;
 use reqwest::{
     StatusCode,
     header::{ACCEPT, CONTENT_TYPE},
 };
-use tracing::*;
-use axum::http::header::HeaderValue;
 use serde::*;
 use serde_json::json;
 use sqlx::{PgConnection, query};
+use tracing::*;
 
 use oauth2::{
     AuthType, AuthUrl, Client, ExtraTokenFields, RedirectUrl, StandardErrorResponse,
@@ -140,8 +140,14 @@ pub async fn get_xbox_token(
     client: &reqwest::Client,
 ) -> Result<(String, String), XboxApiError> {
     let mut headers = HeaderMap::new();
-    headers.insert(CONTENT_TYPE, const {HeaderValue::from_static("application/json") } );
-    headers.insert(ACCEPT, const {HeaderValue::from_static("application/json") } );
+    headers.insert(
+        CONTENT_TYPE,
+        const { HeaderValue::from_static("application/json") },
+    );
+    headers.insert(
+        ACCEPT,
+        const { HeaderValue::from_static("application/json") },
+    );
     let res = client
         .post("https://user.auth.xboxlive.com/user/authenticate")
         .headers(headers)
@@ -179,8 +185,14 @@ async fn get_xsts_token(
 ) -> Result<(String, String), XboxApiError> {
     let mut headers = HeaderMap::new();
     // make these static
-    headers.insert(CONTENT_TYPE, const { HeaderValue::from_static("application/json")  } );
-    headers.insert(ACCEPT, const { HeaderValue::from_static("application/json") } );
+    headers.insert(
+        CONTENT_TYPE,
+        const { HeaderValue::from_static("application/json") },
+    );
+    headers.insert(
+        ACCEPT,
+        const { HeaderValue::from_static("application/json") },
+    );
     let res = client
         .post("https://xsts.auth.xboxlive.com/xsts/authorize")
         .headers(headers)
@@ -196,19 +208,23 @@ async fn get_xsts_token(
         .await?;
 
     match res.status() {
-        StatusCode::OK => 
-            match res.json::<models::XBLResponse>().await? {
-                models::XBLResponse::Success(s) => Ok((s.display_claims.xui.get(0).expect("failed to get xui").uhs.clone(), s.token)),
-                models::XBLResponse::Error(e) => Err(XboxApiError::ApiError(e)),
-            }
-        StatusCode::FORBIDDEN | StatusCode::UNAUTHORIZED => {
-            Err(XboxApiError::Forbidden {
-                body: res.text().await?,
-            })
-        }
+        StatusCode::OK => match res.json::<models::XBLResponse>().await? {
+            models::XBLResponse::Success(s) => Ok((
+                s.display_claims
+                    .xui
+                    .get(0)
+                    .expect("failed to get xui")
+                    .uhs
+                    .clone(),
+                s.token,
+            )),
+            models::XBLResponse::Error(e) => Err(XboxApiError::ApiError(e)),
+        },
+        StatusCode::FORBIDDEN | StatusCode::UNAUTHORIZED => Err(XboxApiError::Forbidden {
+            body: res.text().await?,
+        }),
         status => Err(XboxApiError::OtherStatus(status)),
     }
-
 }
 
 #[derive(Error, Debug)]
@@ -232,7 +248,10 @@ async fn get_minecraft_token(
     client: &reqwest::Client,
 ) -> Result<(String, i32), MinecraftApiError> {
     let mut headers = HeaderMap::new();
-    headers.insert(CONTENT_TYPE, const {HeaderValue::from_static("application/json") } );
+    headers.insert(
+        CONTENT_TYPE,
+        const { HeaderValue::from_static("application/json") },
+    );
     //headers.insert(ACCEPT, "application/json".parse().unwrap());
     let res = client
         .post("https://api.minecraftservices.com/authentication/login_with_xbox")
@@ -280,10 +299,10 @@ async fn get_minecraft_profile(
             return Err(MinecraftApiError::Forbidden {
                 body: res.text().await?,
             });
-        },
+        }
         StatusCode::NOT_FOUND => {
             return Err(MinecraftApiError::NoAssociatedMinecraftAccount);
-        },
+        }
         status => return Err(MinecraftApiError::UnexpectedStatus(status)),
     }
 

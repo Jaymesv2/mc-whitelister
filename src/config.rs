@@ -35,15 +35,10 @@ pub struct Config {
     pub bind_addr: SocketAddr,
     pub reconcile_webhook_key: String,
 
-
-
     pub authentik_api_key: String,
     pub authentik_user: String,
     pub authentik_server: String,
     // luckperms rest api
     pub luckperms_server: String,
     pub luckperms_api_key: String,
-
-
-
 }

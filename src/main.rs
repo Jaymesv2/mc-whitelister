@@ -82,7 +82,7 @@ async fn main() {
         .with_same_site(SameSite::None)
         .with_signed(Key::from(secret.as_slice()));
 
-    let state = Arc::new(AppState { 
+    let state = Arc::new(AppState {
         luckperms: {
             let mut cfg = luckperms_api::apis::configuration::Configuration::new();
             cfg.bearer_access_token = Some(config.luckperms_api_key.clone());
@@ -95,8 +95,8 @@ async fn main() {
             cfg.base_path = config.authentik_server.clone();
             cfg
         },
-        config, 
-        pool, 
+        config,
+        pool,
     });
 
     // includes the file in the binary on release but reads from fs in debug
@@ -129,14 +129,15 @@ async fn main() {
         .route("/login", get(routes::oauth::login))
         .route("/logout", get(routes::logout::logout))
         .route("/oauth/redirect", get(routes::oauth::redirect))
-        .route("/oauth/microsoft/redirect", get(routes::microsoft::redirect))
+        .route(
+            "/oauth/microsoft/redirect",
+            get(routes::microsoft::redirect),
+        )
         .route("/oauth/microsoft", get(routes::microsoft::login))
         .route("/remove/{uuid}", post(routes::accounts::remove))
         .route("/health", get(routes::health::health))
-
         .route("/reconcile/{id}", post(routes::reconcile::reconcile))
         .route("/reconcile", get(routes::reconcile::reconcile))
-
         .nest("/static", static_router)
         .layer(session_layer)
         .with_state(state);

@@ -18,7 +18,6 @@ use oauth2::{
     reqwest,
 };
 
-
 use crate::ms_api::*;
 
 pub async fn login(
@@ -145,7 +144,6 @@ pub async fn redirect(
     )
     .await
     .expect("failed to update minecraft profile");
-
 
     if let Err(e) = tx.commit().await {
         error!("Failed to commit to database: {e:?}");
