@@ -142,6 +142,7 @@ async fn main() {
         .route("/health", get(routes::health::health))
 
         .route("/reconcile", get(routes::reconcile::reconcile))
+        .route("/reconcile", post(routes::reconcile::reconcile))
 
         .nest("/static", static_router)
         .layer(session_layer)

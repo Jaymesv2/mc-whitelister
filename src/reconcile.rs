@@ -8,7 +8,6 @@ use luckperms_api::apis::{users_api, groups_api};
 use authentik_client::apis::core_api;
 use std::collections::HashMap;
 use std::sync::Arc;
-use axum::http::StatusCode;
 use uuid::Uuid;
 
 
@@ -19,27 +18,81 @@ struct Account {
     user_id: String
 }
 
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResponseAccount {
     uuid: Uuid,
     username: String
 }
 
-// #[derive(Debug,Clone)]
-// enum ReconcileErrors {
-//     
+use thiserror::Error;
+use luckperms_api::apis::groups_api::{GetGroupsError, SetGroupNodesError, CreateGroupError,AddGroupNodesError};
+use luckperms_api::apis::users_api::{AddUserNodesError, ClearUserNodesError, GetUserError, CreateUserError, GetUsersError};
+use authentik_client::apis::core_api::CoreGroupsListError;
+
+
+#[derive(Debug, Error)]
+pub enum ReconcileErrors {
+    #[error("database error")]
+    Database(#[from] sqlx::Error),
+    #[error("")]
+    ACGroupsListError(#[from] authentik_client::apis::Error<CoreGroupsListError>),
+    #[error("")]
+    LPGetGroupError(#[from] luckperms_api::apis::Error<GetGroupsError>),
+    #[error("")]
+    LPSetGroupNodesError(#[from] luckperms_api::apis::Error<SetGroupNodesError>),
+    #[error("")]
+    LPCreateGroupError(#[from] luckperms_api::apis::Error<CreateGroupError>),
+    #[error("")]
+    LPAddGroupNodesError(#[from] luckperms_api::apis::Error<AddGroupNodesError>),
+
+    #[error("")]
+    LPAddUserNodesError(#[from] luckperms_api::apis::Error<AddUserNodesError>),
+    #[error("")]
+    LPClearUserNodesError(#[from] luckperms_api::apis::Error<ClearUserNodesError>),
+    #[error("")]
+    LPGetUserError(#[from] luckperms_api::apis::Error<GetUserError>),
+
+    #[error("")]
+    LPCreateUserError(#[from] luckperms_api::apis::Error<CreateUserError>),
+
+
+    #[error("")]
+    LPGetUsersError(#[from] luckperms_api::apis::Error<GetUsersError>),
+
+    // #[error("Luckperms")]
+    // LPGetGroups(#[from] GetGroupsError),
+    // #[error("Authentik")]
+    // CoreGroupsListError(#[from] CoreGroupsListError)
+}
+
+
+
+// impl<T: Into<ReconcileErrors> > From<authentik_client::apis::Error<T>> for ReconcileErrors {
+//     fn from(e: authentik_client::apis::Error<T>) -> ReconcileErrors {
+//         // match e {
+//         //     
+//         // }
+//         todo!()
+//         // authentik_client::apis::Error<T>
+//     }
+// }
+// impl<T: Into<ReconcileErrors> > From<luckperms_api::apis::Error<T>> for ReconcileErrors {
+//     fn from(e: luckperms_api::apis::Error<T>) -> ReconcileErrors {
+//         // match e {
+//         //     
+//         // }
+//         todo!()
+//         // authentik_client::apis::Error<T>
+//     }
 // }
 
 
+pub async fn reconcile_luckperms(state: &Arc<AppState>) -> Result<(),ReconcileErrors> {
+    let mut conn = state.pool.acquire().await?;
 
-pub async fn reconcile_luckperms(state: &Arc<AppState>) -> Result<(),()> {
-    let Ok(mut conn) = state.pool.acquire().await else {
-        error!("failed to aquire db connection");
-        panic!("lazy");
-    };
-
-    let agroups: Vec<AuthentikGroup> = get_authentik_groups(&state).await.expect("failed to get authentik groups");
-    let lgroups = groups_api::get_groups(&state.luckperms).await.expect("failed to get luckperms groups");
+    let agroups: Vec<AuthentikGroup> = get_authentik_groups(&state).await?;//.unwrap();
+    let lgroups = groups_api::get_groups(&state.luckperms).await?;//.unwrap();
     
     let luckperms_group_names: HashSet<&String> = agroups.iter().map(|x| &x.data.name).collect();
 
@@ -60,29 +113,22 @@ pub async fn reconcile_luckperms(state: &Arc<AppState>) -> Result<(),()> {
     for agroup in &agroups {
         if lgroups.iter().find(|x| **x == agroup.data.name).is_none() {
             info!("authentik group {} did not exist in luckperms, creating minecraft group named {}", agroup.name, agroup.data.name);
-            groups_api::create_group(&state.luckperms, Some(luckperms_api::models::new_group::NewGroup { name: agroup.data.name.clone() })).await.expect(&format!("failed to create group {}", agroup.name));
+            groups_api::create_group(&state.luckperms, Some(luckperms_api::models::new_group::NewGroup { name: agroup.data.name.clone() })).await?;
         }
     }
     
     // since all of the groups exist (big assumption i know) we set their permissions
     for agroup in &agroups {
         info!("setting group permissions for authentik group {} named {}", agroup.name, agroup.data.name);
-        groups_api::set_group_nodes(&state.luckperms, &agroup.data.name, Some(agroup.data.clone().into())).await.expect("failed to set group nodes");
+        groups_api::set_group_nodes(&state.luckperms, &agroup.data.name, Some(agroup.data.clone().into())).await?;
     }
 
-    let accounts: Vec<Account> = match sqlx::query_as!(
+    let accounts: Vec<Account> = sqlx::query_as!(
             Account,
             "SELECT user_id, username, uuid FROM minecraft_profile"
         )
         .fetch_all(&mut *conn)
-        .await {
-            Ok(s) => s,
-            Err(e) => {
-                error!("Failed to get user accounts: {e:?}");
-                todo!("lazy")
-                // return Err(StatusCode::INTERNAL_SERVER_ERROR);
-            }
-        };
+        .await?;
 
     let mut authentik_uid_uuid_mapping: HashMap<String, Vec<ResponseAccount>> = HashMap::new();
     for i in accounts {
@@ -97,24 +143,21 @@ pub async fn reconcile_luckperms(state: &Arc<AppState>) -> Result<(),()> {
         }
     }
 
-    
-    error!("{authentik_uid_uuid_mapping:?}");
-
-    use uuid::Uuid;
-
-    let luckperms_users: Vec<Uuid> = users_api::get_users(&state.luckperms).await.expect("failed to get luckperms users");
+    let luckperms_users: Vec<Uuid> = users_api::get_users(&state.luckperms).await?;
 
     info!("created luckperms users");
+    info!("luckpers user: {:?}", luckperms_users);
 
     // you have to collect this iter because the flatmap function can't be persisted across awaits :(
     for (auid, account) in authentik_uid_uuid_mapping.iter().flat_map(|(uid, v)| v.iter().map(move |x| (uid, x))).collect::<Vec<_>>() {
         if luckperms_users.iter().find(|uuid| account.uuid == **uuid).is_none() {
             info!("creating user \"{}\" with uuid \"{}\" in luckperms", account.username, account.uuid);
-            users_api::create_user(&state.luckperms, Some(luckperms_api::models::new_user::NewUser::new(account.uuid, account.username.clone())) ).await.expect("failed to create luckperms user");
+            users_api::create_user(&state.luckperms, Some(luckperms_api::models::new_user::NewUser::new(account.uuid, account.username.clone())) ).await?;
+
         }
 
         let user_uuid: String = format!("{}", account.uuid.hyphenated());
-        let user_data = users_api::get_user(&state.luckperms, &user_uuid ).await.expect("failed to get user data");
+        let user_data = users_api::get_user(&state.luckperms, &user_uuid ).await?;
 
         info!("data for {}: {:?}", account.username, user_data);
 
@@ -125,8 +168,8 @@ pub async fn reconcile_luckperms(state: &Arc<AppState>) -> Result<(),()> {
         // Any other groups should be ignored.
     
         let user_groups = user_data.parent_groups.unwrap_or_else(|| vec![]);
-
-        let expected_groups = user_auid_lp_groups.get(auid).expect("failed to find groups for user");
+        let empty = vec![];
+        let expected_groups = user_auid_lp_groups.get(auid).unwrap_or_else(|| &empty );
         info!("expecting {} to have groups: {:?}", account.username, expected_groups);
 
         let to_remove: Vec<&String> = user_groups.iter().filter(|gname| 
@@ -137,7 +180,7 @@ pub async fn reconcile_luckperms(state: &Arc<AppState>) -> Result<(),()> {
             info!("removing groups {:?} from {}", to_remove, account.username);
             users_api::clear_user_nodes(&state.luckperms, &user_uuid, Some(
                 to_remove.into_iter().map(|name| luckperms_api::models::new_node::NewNode::new(format!("group.{}", name )) ).collect()
-            )).await.expect("failed to remove extra groups")
+            )).await?;
         }
 
         let to_add: Vec<&String> = expected_groups.iter().filter(|gname| 
@@ -149,7 +192,7 @@ pub async fn reconcile_luckperms(state: &Arc<AppState>) -> Result<(),()> {
 
             users_api::add_user_nodes(&state.luckperms, &user_uuid, None, Some(
                 to_add.into_iter().map(|name| luckperms_api::models::new_node::NewNode { key: format!("group.{}", name ), value: Some(true), context: None, expiry: None } ).collect()
-            )).await.expect("failed to remove extra groups");
+            )).await?;
         }
     }
 
@@ -163,10 +206,11 @@ struct AuthentikGroup {
     data: AuthentikLuckpermsGroupAttribute 
 }
 
-async fn get_authentik_groups(state: &Arc<AppState>) -> Result<Vec<AuthentikGroup>, authentik_client::apis::Error<authentik_client::apis::core_api::CoreGroupsListError>> {
+async fn get_authentik_groups(state: &Arc<AppState>) -> Result<Vec<AuthentikGroup>, authentik_client::apis::Error<CoreGroupsListError>> {
     let authentik_groups_req = core_api::core_groups_list(&state.authentik, 
+        Some(&serde_json::json!({ "luckperms_sync": true }).to_string()),
         None,
-        None,
+        // Some(true), // include users, true for now but will be removed soon ish
         None,
         None,
         None,
@@ -204,16 +248,7 @@ async fn get_authentik_groups(state: &Arc<AppState>) -> Result<Vec<AuthentikGrou
     }).collect())
 }
 
-#[derive(Debug, Clone, Deserialize)]
-struct AuthentikMinecraftUserAttribute {
-    accounts: Vec<AuthentikMinecraftAccount>,
-}
 
-#[derive(Debug, Clone, Deserialize)]
-struct AuthentikMinecraftAccount {
-    uuid: String,
-    last_updated: Option<String>,
-}
 
 #[derive(Debug, Clone, Deserialize)]
 struct AuthentikLuckpermsGroupAttribute {

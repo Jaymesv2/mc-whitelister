@@ -91,6 +91,7 @@ pub async fn index(
     session: Session,
     State(state): State<Arc<AppState>>,
 ) -> Result<Response, StatusCode> {
+    
     let Some(user_id): Option<UserID> = session
         .get(UserID::SESSION_KEY)
         .await
