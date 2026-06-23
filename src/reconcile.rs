@@ -10,6 +10,42 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
 
+use authentik_client::apis::core_api::CoreGroupsListError;
+use luckperms_api::apis::groups_api::{
+    AddGroupNodesError, CreateGroupError, GetGroupsError, SetGroupNodesError,
+};
+use luckperms_api::apis::users_api::{
+    AddUserNodesError, ClearUserNodesError, CreateUserError, GetUserError, GetUsersError,
+};
+use thiserror::Error;
+
+
+use tokio::sync::mpsc::{channel, Sender, Receiver};
+
+
+pub async fn reconcile_task(state: Arc<AppState>, mut rx: Receiver<()>) {
+    use tokio::time::timeout;
+    use std::time::Duration;
+    info!("starting reconcile task");
+    loop {
+        match timeout(Duration::from_mins(15), rx.recv() ).await {
+            Ok(None) => {
+                warn!("reconcile receiver has been dropped");
+                break;
+            },
+            Err(_) => {},
+            Ok(Some(_req)) => {
+                // this should set a trace context or something
+            }
+        }
+        let res = reconcile_luckperms(&state).await;
+        if let Err(e) = res {
+            warn!("error occured while reconciling luckperms data: {e:?}");
+        };
+    }
+}
+
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Account {
     uuid: String,
@@ -23,14 +59,6 @@ pub struct ResponseAccount {
     username: String,
 }
 
-use authentik_client::apis::core_api::CoreGroupsListError;
-use luckperms_api::apis::groups_api::{
-    AddGroupNodesError, CreateGroupError, GetGroupsError, SetGroupNodesError,
-};
-use luckperms_api::apis::users_api::{
-    AddUserNodesError, ClearUserNodesError, CreateUserError, GetUserError, GetUsersError,
-};
-use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum ReconcileErrors {
@@ -46,43 +74,17 @@ pub enum ReconcileErrors {
     LPCreateGroupError(#[from] luckperms_api::apis::Error<CreateGroupError>),
     #[error("")]
     LPAddGroupNodesError(#[from] luckperms_api::apis::Error<AddGroupNodesError>),
-
     #[error("")]
     LPAddUserNodesError(#[from] luckperms_api::apis::Error<AddUserNodesError>),
     #[error("")]
     LPClearUserNodesError(#[from] luckperms_api::apis::Error<ClearUserNodesError>),
     #[error("")]
     LPGetUserError(#[from] luckperms_api::apis::Error<GetUserError>),
-
     #[error("")]
     LPCreateUserError(#[from] luckperms_api::apis::Error<CreateUserError>),
-
     #[error("")]
     LPGetUsersError(#[from] luckperms_api::apis::Error<GetUsersError>),
-    // #[error("Luckperms")]
-    // LPGetGroups(#[from] GetGroupsError),
-    // #[error("Authentik")]
-    // CoreGroupsListError(#[from] CoreGroupsListError)
 }
-
-// impl<T: Into<ReconcileErrors> > From<authentik_client::apis::Error<T>> for ReconcileErrors {
-//     fn from(e: authentik_client::apis::Error<T>) -> ReconcileErrors {
-//         // match e {
-//         //
-//         // }
-//         todo!()
-//         // authentik_client::apis::Error<T>
-//     }
-// }
-// impl<T: Into<ReconcileErrors> > From<luckperms_api::apis::Error<T>> for ReconcileErrors {
-//     fn from(e: luckperms_api::apis::Error<T>) -> ReconcileErrors {
-//         // match e {
-//         //
-//         // }
-//         todo!()
-//         // authentik_client::apis::Error<T>
-//     }
-// }
 
 pub async fn reconcile_luckperms(state: &Arc<AppState>) -> Result<(), ReconcileErrors> {
     let mut conn = state.pool.acquire().await?;

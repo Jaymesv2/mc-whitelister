@@ -139,6 +139,9 @@ async fn main() {
         .with_same_site(SameSite::None)
         .with_signed(Key::from(secret.as_slice()));
 
+    let (tx,rx) = tokio::sync::mpsc::channel(10);
+    
+
     // TODO: set the reqwest client in  both api clients to remove duplication
     let state = Arc::new(AppState {
         luckperms: {
@@ -153,9 +156,11 @@ async fn main() {
             cfg.base_path = config.authentik_server.clone();
             cfg
         },
+        reconcile_req_sender: tx,
         config,
         pool,
     });
+    let reconcile_task = tokio::spawn( reconcile::reconcile_task(state.clone(), rx) );
 
     // includes the file in the binary on release but reads from fs in debug
     macro_rules! static_route {
@@ -210,7 +215,7 @@ async fn main() {
         .unwrap_or_else(|_| panic!("failed to bind to {bind_addr}"));
 
     axum::serve(listener, app.into_make_service())
-        .with_graceful_shutdown(shutdown_signal(deletion_task.abort_handle()))
+        .with_graceful_shutdown(shutdown_signal(deletion_task.abort_handle(), reconcile_task.abort_handle()))
         .await
         .expect("failed to serve application content");
 
@@ -218,7 +223,7 @@ async fn main() {
 }
 use tokio::task::AbortHandle;
 
-async fn shutdown_signal(deletion_task_abort_handle: AbortHandle) {
+async fn shutdown_signal(deletion_task_abort_handle: AbortHandle, reconcile_task_abort_handle: AbortHandle) {
     let ctrl_c = async {
         tokio::signal::ctrl_c()
             .await
@@ -238,8 +243,12 @@ async fn shutdown_signal(deletion_task_abort_handle: AbortHandle) {
 
     tokio::select! {
         _ = ctrl_c => { 
-            deletion_task_abort_handle.abort() },
+            deletion_task_abort_handle.abort();
+            reconcile_task_abort_handle.abort();
+        },
         _ = terminate => { 
-            deletion_task_abort_handle.abort() },
+            deletion_task_abort_handle.abort() ;
+            reconcile_task_abort_handle.abort();
+        },
     }
 }

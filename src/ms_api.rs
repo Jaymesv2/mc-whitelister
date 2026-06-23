@@ -148,6 +148,7 @@ pub async fn get_xbox_token(
         ACCEPT,
         const { HeaderValue::from_static("application/json") },
     );
+
     let res = client
         .post("https://user.auth.xboxlive.com/user/authenticate")
         .headers(headers)

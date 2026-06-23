@@ -24,6 +24,9 @@ pub struct RemoveBody {
     pub uuid: String,
 }
 
+
+
+
 pub async fn remove(
     session: Session,
     State(app_state): State<Arc<AppState>>,
