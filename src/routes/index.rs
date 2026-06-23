@@ -87,10 +87,12 @@ fn main_page(user: User, accs: Vec<Account>) -> Markup {
     )
 }
 
+#[instrument(skip_all)]
 pub async fn index(
     session: Session,
     State(state): State<Arc<AppState>>,
 ) -> Result<Response, StatusCode> {
+    info!("index");
     let Some(user_id): Option<UserID> = session
         .get(UserID::SESSION_KEY)
         .await

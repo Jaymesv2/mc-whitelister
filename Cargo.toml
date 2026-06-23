@@ -18,9 +18,14 @@ sqlx = {version = "0.8", features = ["runtime-tokio-rustls", "postgres","migrate
 
 tracing = "0.1"
 tracing-subscriber = {version = "0.3", features = ["env-filter"]}
-#opentelemetry =  "0.18.0"
-#opentelemetry-otlp = "0.11.0"
-#opentelemetry-semantic-conventions = "0.10.0"
+
+
+tracing-opentelemetry  = "0.33"
+opentelemetry =  "0.32"
+opentelemetry_sdk = "0.32"
+opentelemetry-otlp = {version = "0.32", default-features = false, features = ["internal-logs", "logs", "metrics", "trace", "grpc-tonic"]}
+opentelemetry-semantic-conventions = "0.32"
+
 tower = "0.5"
 # redis = {version = "1.2", features = ["aio", "tokio-comp"]}
 
@@ -28,19 +33,20 @@ tower = "0.5"
 maud = "0.27"
 
 # async-session = "3"
+
 tower-sessions = {version = "0.14", features = ["signed"]}
 tower-sessions-sqlx-store = {version = "0.15", features = ["postgres"]}
 
 
 luckperms_api = {path = "./luckperms_api", default-features = false, features = ["rustls"]}
-authentik-client = "2026.2.1"
+authentik-client = {version = "2026.2.1",  default-features = false, features = ["rustls"]}
 
 # axum_session = { version = "0.19" }
 # axum_session_sqlx = {version = "0.8", features = ["postgres", "tls-rustls"]}
 # async-sqlx-sessions = {version = "0.4", features = ["pg"]}
 # async-redis-session = "0.2"
 # axum-sessions = "0.6"
-reqwest = {version = "0.12", default-features = false, features = [ "charset",  "http2", "system-proxy", "json", "multipart", "rustls-tls" ]}
+reqwest = {version = "0.12", default-features = false, features = [ "charset",  "http2", "system-proxy", "json", "multipart", "rustls-tls", "rustls-tls-webpki-roots" ]}
 oauth2 = {version = "5.0", features = ["reqwest", "rustls-tls"]}
 
 
@@ -58,3 +64,4 @@ anyhow = "1"
 base64 = "0.22"
 thiserror = "2"
 serde_path_to_error = "0.1"
+axum-tracing-opentelemetry = "0.38.0"

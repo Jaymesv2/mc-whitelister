@@ -13,23 +13,79 @@ use oauth_bridge::{
 use rand::Rng;
 use std::sync::Arc;
 
+use axum_tracing_opentelemetry::middleware::{OtelAxumLayer, OtelInResponseLayer};
+
 use tower_sessions::session_store::ExpiredDeletion;
 use tower_sessions_sqlx_store::PostgresStore;
+
+
+
+use opentelemetry::global;
+use opentelemetry_otlp::{WithExportConfig, ExporterBuildError};
+
+
+
+use tracing_subscriber::{EnvFilter, fmt, prelude::*};
+
+use opentelemetry_sdk::{propagation::TraceContextPropagator, trace::SdkTracerProvider};
+use opentelemetry::trace::{Tracer, TracerProvider as _};
+use tracing::{error, span};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::Registry;
+
+async fn setup_telemetry() -> Result<(),ExporterBuildError>{
+    let otlp_exporter = opentelemetry_otlp::SpanExporter::builder()
+        .with_tonic()
+        .build()?;
+        // .expect("failed to create otlp span exporter");
+
+    // Create a new OpenTelemetry trace pipeline that prints to stdout
+    let tracer_provider = SdkTracerProvider::builder()
+        .with_batch_exporter(otlp_exporter)   // was: with_simple_exporter
+        // .with_resource(Resource::builder().with_service_name("example").build())
+        .build();
+
+    let tracer = tracer_provider.tracer("example");
+
+    global::set_tracer_provider(tracer_provider);
+
+    // what does this do??
+    global::set_text_map_propagator(TraceContextPropagator::new());
+
+    let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+
+
+
+    // Create a tracer provider with the exporter
+    // let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+    //     .with_batch_exporter(otlp_exporter)
+    //     .build();
+
+    // // Set it as the global provider
+    // global::set_tracer_provider(tracer_provider);
+    
+    tracing_subscriber::registry()
+        .with(telemetry)
+        .with(EnvFilter::from_default_env())
+        .with(fmt::layer().with_file(true).with_line_number(true))
+        .init();
+    Ok(())
+}
 
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
-    use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
-    tracing_subscriber::registry()
-        .with(fmt::layer().with_file(true).with_line_number(true))
-        .with(EnvFilter::from_default_env())
-        .init();
+    setup_telemetry().await.expect("failed to setup telemetry");
 
     let config: Config = match envy::from_env::<Config>() {
         Ok(config) => config,
         Err(error) => panic!("{:#?}", error),
     };
+
+    if config.reconcile_webhook_key.is_none() {
+        warn!("RECONCILE_WEBHOOK_KEY was not set, disabling the webhook");
+    }
 
     debug!("loaded app config: {config:?}");
 
@@ -65,6 +121,7 @@ async fn main() {
     };
 
     let session_store = PostgresStore::new(pool.clone());
+
     session_store
         .migrate()
         .await
@@ -82,6 +139,7 @@ async fn main() {
         .with_same_site(SameSite::None)
         .with_signed(Key::from(secret.as_slice()));
 
+    // TODO: set the reqwest client in  both api clients to remove duplication
     let state = Arc::new(AppState {
         luckperms: {
             let mut cfg = luckperms_api::apis::configuration::Configuration::new();
@@ -140,6 +198,8 @@ async fn main() {
         .route("/reconcile", get(routes::reconcile::reconcile))
         .nest("/static", static_router)
         .layer(session_layer)
+        .layer(OtelInResponseLayer::default())  // inject trace context into responses
+        .layer(OtelAxumLayer::default())        // start the span on incoming request
         .with_state(state);
 
     let bind_addr = "0.0.0.0:8080";
@@ -177,7 +237,9 @@ async fn shutdown_signal(deletion_task_abort_handle: AbortHandle) {
     let terminate = std::future::pending::<()>();
 
     tokio::select! {
-        _ = ctrl_c => { deletion_task_abort_handle.abort() },
-        _ = terminate => { deletion_task_abort_handle.abort() },
+        _ = ctrl_c => { 
+            deletion_task_abort_handle.abort() },
+        _ = terminate => { 
+            deletion_task_abort_handle.abort() },
     }
 }

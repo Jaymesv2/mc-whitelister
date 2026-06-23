@@ -163,6 +163,13 @@ pub async fn redirect(
         .await
         .expect("failed to remove ms oauth exchange data from session");
 
+    // reconcile when a user is added
+    if let Err(e) = crate::reconcile::reconcile_luckperms(&app_state).await {
+        warn!("failed to reconcile with error: {e:?}");
+    }
+        // .expect("failed to reconcile");
+
+
     Ok(response::Redirect::to("/").into_response())
 }
 
