@@ -81,7 +81,6 @@
               ./.sqlx
               ./static
               (craneLib.fileset.commonCargoSources ./luckperms_api)
-              (craneLib.fileset.commonCargoSources ./luckperms_reconciler)
               (craneLib.fileset.commonCargoSources crate)
             ];
           };
@@ -104,14 +103,6 @@
             src = fileSetForCrate ./.;
           }
         );
-        luckperms_reconciler = craneLib.buildPackage (
-          individualCrateArgs
-          // {
-            pname = "luckperms_reconciler";
-            cargoExtraArgs = "-p luckperms_reconciler";
-            src = fileSetForCrate ./luckperms_reconciler;
-          }
-        );
         # oauth_bridge = craneLib.buildPackage (commonArgs // {
         #     inherit cargoArtifacts;
         #     nativeBuildInputs = (commonArgs.nativeBuildInputs or []) ++ [
@@ -122,10 +113,31 @@
         #     # '';
         # });
 
-        luckperms-openapi-spec = pkgs.fetchurl {
+        luckperms-openapi-spec-base = pkgs.fetchurl {
             url = "https://raw.githubusercontent.com/LuckPerms/rest-api/5ca1495e522d11f17d74d823ec32b93a9716460d/src/main/resources/luckperms-openapi.yml";
             hash = "sha256-N3SrTWxNbbMu5Jy6Oiq7tv0kfnfO205tCZO1mT7wsvU=";
         };
+        
+        luckperms-openapi-spec = pkgs.runCommand "luckperms-openapi.yml"
+              { nativeBuildInputs = [ pkgs.yq-go ]; }
+              ''
+                yq '.components.schemas.PlayerSaveResultOutcome.enum[] |= upcase' \
+                  ${luckperms-openapi-spec-base} > $out
+              '';
+
+        # luckperms-openapi-spec = pkgs.stdenv.mkDerivation {
+        #     name = "luckperms-openapi-spec";
+        #     version = "0.0.1";
+        #     # src = luckperms-openapi-spec-base;
+        #     buildInputs = [ pkgs.yq ];
+        #     buildPhase = ''
+        #         cp ${luckperms-openapi-spec-base} .
+        #         ${pkgs.yq}/bin/yq -i '.components.schemas.PlayerSaveResultOutcome.enum[] |= upcase' luckperms-openapi.yml
+        #     '';
+        #     installPhase = ''
+        #         cp luckperms-openapi.yml $out
+        #     '';
+        # };
       in {
         # rust-project.crane.args = {
         #   buildInputs = lib.optionals pkgs.stdenv.isDarwin (
@@ -161,6 +173,7 @@
             mold 
             openssl
             tailwindcss_4
+            skopeo
 
             openapi-generator-cli
           ];
@@ -196,11 +209,79 @@
             enable = true;
             listen = "127.0.0.1:9090";
           };
-          services.redis = {
+          # services.redis = {
+          #   enable = true;
+          #   #package = pkgs.keydb;
+          #   #listen = ""
+          # };
+          services.opentelemetry-collector = {
             enable = true;
-            #package = pkgs.keydb;
-            #listen = ""
+            settings = {
+                receivers.otlp.protocols.grpc.endpoint = "0.0.0.0:4317";
+                exporters = {
+                    otlp = {
+                        endpoint = "127.0.0.1:5081";
+
+                        headers = {
+                          Authorization = "Basic YWRtaW5AamF5bWVzLnh5ejpCQVZCZEw0b0ppM0dqYVNQ";
+                          organization = "default";
+                          stream-name = "default";
+                        };
+                        tls.insecure = true;
+                        # sending_queue.batch = {};
+                    };
+                    file.path = "./log.json";
+                    debug.verbosity = "detailed";
+                };
+                extensions = {
+                    # health_check.endpoint = "0.0.0.0:13133";
+                    # pprof.endpoint = "0.0.0.0:1777";
+                    # zpages.endpoint = "0.0.0.0:55679";
+                };
+                service = {
+                    extensions = ["health_check" /* "pprof" "zpages" */];
+                    pipelines = {
+                        traces = {
+                            receivers = ["otlp"];
+                            processors = [];
+                            exporters = ["debug" "file" "otlp"];
+                        };
+                        metrics = {
+                            receivers = ["otlp"];
+                            processors = [];
+                            exporters = ["debug" "file" "otlp"];
+                        };
+                        logs = {
+                            receivers = ["otlp"];
+                            processors = [];
+                            exporters = ["debug" "file" "otlp"];
+                        };
+                    };
+                };
+
+            };
           };
+          processes = {
+            # silly-example.exec = "while true; do echo hello && sleep 1; done";
+            # ping.exec = "ping localhost";
+    
+            openobserve = {
+                exec = "${pkgs.openobserve}/bin/openobserve";
+                cwd = "./openobserve";
+                ready = {
+                    http.get = {
+                        port = 5080;
+                        path = "/healthz";
+                        host = "127.0.0.1";  # default
+                        scheme = "http";     # default
+                    };
+                };
+            };
+  
+        };
+
+          
+
           # pre-commit.hooks = {
           #   # lint shell scripts
           #   shellcheck.enable = true;
@@ -219,18 +300,19 @@
         
         packages.default = oauth_bridge;
         packages.oauth_bridge = oauth_bridge;
-        packages.luckperms_reconciler = luckperms_reconciler;
 
         packages.oauth_bridge_container = pkgs.dockerTools.buildImage {
           name = "oauth-bridge";
+          contents = [ pkgs.cacert ];
           config = {
             Cmd = [ "${oauth_bridge}/bin/oauth-bridge" ];
           };
         };
-        packages.luckperms_reconciler_container = pkgs.dockerTools.buildImage {
-          name = "luckperms_reconciler";
+        packages.oauth_bridge_container_stream = pkgs.dockerTools.streamLayeredImage {
+          name = "oauth-bridge";
+          contents = [ pkgs.cacert ];
           config = {
-            Cmd = [ "${luckperms_reconciler}/bin/luckperms_reconciler" ];
+            Cmd = [ "${oauth_bridge}/bin/oauth-bridge" ];
           };
         };
       };

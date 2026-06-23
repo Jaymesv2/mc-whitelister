@@ -4,10 +4,10 @@
 
 | Name | Value |
 |---- | -----|
-| CleanInsert | clean_insert |
-| NoChange | no_change |
-| UsernameUpdated | username_updated |
-| OtherUniqueIdsPresentForUsername | other_unique_ids_present_for_username |
+| CleanInsert | CLEAN_INSERT |
+| NoChange | NO_CHANGE |
+| UsernameUpdated | USERNAME_UPDATED |
+| OtherUniqueIdsPresentForUsername | OTHER_UNIQUE_IDS_PRESENT_FOR_USERNAME |
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
