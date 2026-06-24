@@ -262,9 +262,6 @@
             };
           };
           processes = {
-            # silly-example.exec = "while true; do echo hello && sleep 1; done";
-            # ping.exec = "ping localhost";
-    
             openobserve = {
                 exec = "${pkgs.openobserve}/bin/openobserve";
                 cwd = "./openobserve";
@@ -272,12 +269,19 @@
                     http.get = {
                         port = 5080;
                         path = "/healthz";
-                        host = "127.0.0.1";  # default
-                        scheme = "http";     # default
                     };
                 };
             };
-  
+            lpapi = {
+                exec = ''
+                    podman rm -f lpapi 2>/dev/null || true
+                    exec podman run --rm --name lpapi -p 8008:8008 -e "LUCKPERMS_REST_HTTP_PORT=8008" ghcr.io/luckperms/rest-api
+                '';
+                ready.http.get = {
+                    port = 8008;
+                    path = "/health";
+                };
+            };
         };
 
           
