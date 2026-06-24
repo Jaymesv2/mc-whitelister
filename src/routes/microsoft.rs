@@ -20,11 +20,13 @@ use oauth2::{
 
 use crate::ms_api::*;
 
+use crate::AppError;
+
 pub async fn login(
     session: Session,
     State(state): State<Arc<AppState>>,
     _headers: HeaderMap,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<impl IntoResponse, AppError> {
     let client = get_ms_oauth2_client(&state.config);
 
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
@@ -46,8 +48,7 @@ pub async fn login(
                 csrf: csrf_token.into_secret(),
             },
         )
-        .await
-        .expect("failed to insert ms oauth exchange data");
+        .await?;
 
     Ok(Redirect::to(authorize_url.as_ref()))
 }
@@ -62,15 +63,13 @@ pub struct RedirectParams {
 pub async fn redirect(
     session: Session,
     State(app_state): State<Arc<AppState>>,
-    //_headers: HeaderMap,
     Query(RedirectParams { error, state, code }): Query<RedirectParams>,
-) -> Result<Response, StatusCode> {
+) -> Result<Response, AppError> {
     let client = get_ms_oauth2_client(&app_state.config);
 
     let Some(user_id): Option<UserID> = session
         .get(UserID::SESSION_KEY)
-        .await
-        .expect("failed to get user id")
+        .await?
     else {
         return Ok(response::Redirect::to("/login").into_response());
     };
@@ -83,37 +82,38 @@ pub async fn redirect(
     };
 
     // should add logging here
-    let Some(exchange_data) = session
+    let exchange_data = session
         .get::<MSOAuthExchangeData>(MSOAuthExchangeData::SESSION_KEY)
-        .await
-        .expect("failed to get exchange data")
-    else {
-        return Err(StatusCode::FORBIDDEN);
-    };
+        .await?
+        .ok_or(AppError::NoOauthExchangeDataInSession)?;
 
-    let pkce: PkceCodeVerifier = PkceCodeVerifier::new(exchange_data.pkce);
+    // validate csrf token
     if state != exchange_data.csrf {
         error!("Failed to validate csrf");
-        return Err(StatusCode::FORBIDDEN);
+        return Err(AppError::InvalidCSRFToken)
     }
 
+    let pkce: PkceCodeVerifier = PkceCodeVerifier::new(exchange_data.pkce);
+
+    // TODO: move into app state
     let http_client = reqwest::ClientBuilder::new()
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .expect("failed to build http client");
 
-    let token = match client
+    // exchange the token
+    let token = client
         .exchange_code(AuthorizationCode::new(code))
         .set_pkce_verifier(pkce)
         .request_async(&http_client)
-        .await
-    {
-        Ok(s) => s,
-        Err(e) => {
-            error!("error occured while exchaging token: {e:?}");
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
+        .await?;
+    // {
+    //     Ok(s) => s,
+    //     Err(e) => {
+    //         error!("error occured while exchaging token: {e:?}");
+    //         return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    //     }
+    // };
 
     // The id token should be verified using microsofts jwks
     #[derive(Debug, Serialize, Deserialize)]
@@ -121,19 +121,21 @@ pub async fn redirect(
     let contents: biscuit::JWT<MsClaims, MsClaims> =
         biscuit::JWT::new_encoded(&token.extra_fields().id_token);
 
-    let id_contents: biscuit::ClaimsSet<MsClaims> = contents.unverified_payload().unwrap(); // bad
+    let id_contents: biscuit::ClaimsSet<MsClaims> = contents.unverified_payload().expect("failed to unwrap content");
+    // .unwrap(); // bad
     let sub = id_contents
         .registered
         .subject
         .expect("microsoft did not provide subject in id token");
 
-    let mut tx = match app_state.pool.begin().await {
-        Ok(s) => s,
-        Err(e) => {
-            error!("Error starting transaction {e:?}");
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
+    let mut tx = app_state.pool.begin().await?;
+    // {
+    //     Ok(s) => s,
+    //     Err(e) => {
+    //         error!("Error starting transaction {e:?}");
+    //         return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    //     }
+    // };
 
     update_mc_profile_from_ms_token(
         &user_id.0,
@@ -145,10 +147,12 @@ pub async fn redirect(
     .await
     .expect("failed to update minecraft profile");
 
-    if let Err(e) = tx.commit().await {
-        error!("Failed to commit to database: {e:?}");
-        return Err(StatusCode::INTERNAL_SERVER_ERROR);
-    }
+    // if let Err(e) = 
+    tx.commit().await?;
+    // {
+    //     error!("Failed to commit to database: {e:?}");
+    //     return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    // }
 
     // if let Ok(s) = MicrosoftRefreshToken::try_from(token.clone()) {
     //     if let Err(e) = insert_ms_refresh_token(&mut *tx, s).await {
@@ -160,10 +164,11 @@ pub async fn redirect(
     //query
     let _ = session
         .remove::<MSOAuthExchangeData>(MSOAuthExchangeData::SESSION_KEY)
-        .await
-        .expect("failed to remove ms oauth exchange data from session");
+        .await?;
+        // .expect("failed to remove ms oauth exchange data from session");
 
     app_state.reconcile_req_sender.send(()).await.expect("reconcile request could not be sent when reconcile task is died");
+
     // reconcile when a user is added
     // if let Err(e) = crate::reconcile::reconcile_luckperms(&app_state).await {
     //     warn!("failed to reconcile with error: {e:?}");

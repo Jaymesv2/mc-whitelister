@@ -160,6 +160,7 @@ async fn main() {
         config,
         pool,
     });
+
     let reconcile_task = tokio::spawn( reconcile::reconcile_task(state.clone(), rx) );
 
     // includes the file in the binary on release but reads from fs in debug

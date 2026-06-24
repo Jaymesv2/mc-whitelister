@@ -10,6 +10,7 @@ use serde::*;
 use sqlx::{query, query_as};
 use std::sync::Arc;
 use tracing::*;
+use crate::AppError;
 // use axum_session::Session;
 // use axum_session_sqlx::SessionPgPool;
 use tower_sessions::Session;
@@ -26,12 +27,13 @@ pub struct RemoveBody {
 
 
 
-
+// TODO: the error handling here needs to be updated.
 pub async fn remove(
     session: Session,
     State(app_state): State<Arc<AppState>>,
     Path(uuid): Path<String>,
 ) -> Result<Response, StatusCode> {
+
     let Some(user_id): Option<UserID> = session
         .get(UserID::SESSION_KEY)
         .await

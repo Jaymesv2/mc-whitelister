@@ -37,7 +37,7 @@ fn header(title: &str) -> Markup {
     }
 }
 
-fn with_common(title: &str, content: Markup) -> Markup {
+pub fn with_common(title: &str, content: Markup) -> Markup {
     html! {
         (header(title))
         body {
@@ -91,20 +91,16 @@ fn main_page(user: User, accs: Vec<Account>) -> Markup {
 pub async fn index(
     session: Session,
     State(state): State<Arc<AppState>>,
-) -> Result<Response, StatusCode> {
+) -> Result<Response, AppError> {
     info!("index");
     let Some(user_id): Option<UserID> = session
         .get(UserID::SESSION_KEY)
-        .await
-        .expect("failed to get user id")
+        .await?
     else {
         return Ok(response::Redirect::to("/login").into_response());
     };
 
-    let Ok(mut conn) = state.pool.acquire().await else {
-        error!("failed to aquire db connection");
-        return Err(StatusCode::INTERNAL_SERVER_ERROR);
-    };
+    let mut conn = state.pool.acquire().await?;
 
     let account = match query_as!(User, "SELECT * FROM users WHERE id = $1", user_id.0)
         .fetch_one(&mut *conn)
@@ -118,7 +114,7 @@ pub async fn index(
         }
         Err(e) => {
             error!("failed to get user account from database: error {e}");
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            return Err(e.into());
         }
     };
 
@@ -132,7 +128,7 @@ pub async fn index(
             Ok(s) => s,
             Err(e) => {
                 error!("Failed to get user accounts: {e:?}");
-                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+                return Err(e.into());
             }
         };
 
