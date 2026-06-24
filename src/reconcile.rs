@@ -20,7 +20,7 @@ use luckperms_api::apis::users_api::{
 use thiserror::Error;
 
 
-use tokio::sync::mpsc::{channel, Sender, Receiver};
+use tokio::sync::mpsc::Receiver;
 
 
 pub async fn reconcile_task(state: Arc<AppState>, mut rx: Receiver<()>) {

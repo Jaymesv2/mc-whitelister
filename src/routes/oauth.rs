@@ -4,7 +4,7 @@ use axum::{
     response::{IntoResponse, Redirect},
 };
 
-use reqwest::StatusCode;
+// use reqwest::StatusCode;
 use time::OffsetDateTime;
 use tracing::*;
 
@@ -22,7 +22,7 @@ use crate::AppError;
 
 use oauth2::{
     AuthorizationCode, CsrfToken, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope,
-    TokenResponse, reqwest,
+    TokenResponse
 };
 
 const OAUTH_REDIRECT_PATH: &str = "/oauth/redirect";
@@ -98,6 +98,9 @@ pub struct RedirectParams {
 //     }
 // }
 
+
+
+
 pub async fn redirect(
     session: Session,
     State(app_state): State<Arc<AppState>>,
@@ -116,22 +119,12 @@ pub async fn redirect(
         return Err(AppError::InvalidCSRFToken);
     }
     
-    // move to client
-    let http_client = reqwest::ClientBuilder::new()
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .expect("failed to build http client");
-
-    // let token: StandardTokenResponse<MicrosoftExtraFields, _>  = match client
-    //     .exchange_code(AuthorizationCode::new(code))
-    //     .set_pkce_verifier(pkce)
-    //     .await
 
     let token_result = client
         .exchange_code(AuthorizationCode::new(code))
         // Set the PKCE code verifier.
         .set_pkce_verifier(PkceCodeVerifier::new(exchange_data.pkce))
-        .request_async(&http_client)
+        .request_async(&crate::ReqwestClient(app_state.http_client.clone()))
         .await?;
         // .expect("failed to exchange code for tokens");
 

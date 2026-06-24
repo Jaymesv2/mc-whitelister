@@ -46,8 +46,9 @@ authentik-client = {version = "2026.2.1",  default-features = false, features = 
 # async-sqlx-sessions = {version = "0.4", features = ["pg"]}
 # async-redis-session = "0.2"
 # axum-sessions = "0.6"
-reqwest = {version = "0.12", default-features = false, features = [ "charset",  "http2", "system-proxy", "json", "multipart", "rustls-tls", "rustls-tls-webpki-roots" ]}
-oauth2 = {version = "5.0", features = ["reqwest", "rustls-tls"]}
+reqwest = {version = "0.13", default-features = false, features = [ "charset",  "http2", "system-proxy", "json", "multipart", "rustls" ] }
+oauth2 = {version = "5.0", default-features = false}
+http = "1.4"
 
 
 uuid = "1.23.3"

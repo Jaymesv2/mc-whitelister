@@ -4,9 +4,16 @@ pub mod ms_api;
 pub mod reconcile;
 pub mod routes;
 pub mod session;
-pub use config::*;
 
-// use sqlx::mysql::MySqlPool;
+pub use config::*;
+use std::pin::Pin;
+use thiserror::Error;
+use axum::{
+    response::{Html, IntoResponse, Response},
+    http::StatusCode
+};
+// use axum::
+use maud::{Markup, html};
 
 #[derive(Debug)]
 pub struct AppState {
@@ -15,10 +22,10 @@ pub struct AppState {
     pub luckperms: luckperms_api::apis::configuration::Configuration,
     pub authentik: authentik_client::apis::configuration::Configuration,
     pub reconcile_req_sender: tokio::sync::mpsc::Sender<()>,
+    pub http_client: reqwest::Client,
 }
 
 
-use thiserror::Error;
 // this represents the top level errors the user may see
 #[derive(Debug,Error)]
 pub enum AppError {
@@ -44,11 +51,6 @@ pub enum AppError {
     InvalidCSRFToken,
 }
 
-use axum::response::{Html, IntoResponse, Response};
-use axum::http::StatusCode;
-// use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
-
-use maud::{Markup, html};
 
 
 fn render_error_page(status: StatusCode, message: impl AsRef<str>, trace_id: Option<impl AsRef<str>>) -> Markup {
@@ -57,6 +59,10 @@ fn render_error_page(status: StatusCode, message: impl AsRef<str>, trace_id: Opt
         html!{
             div {
                 h1 { (format!("{}", status) ) }
+                h2 { (message.as_ref()) }
+                @if let Some(trace_id) = trace_id {
+                    p { (format!("trace id: {}", trace_id.as_ref()) ) }
+                }
                 //a ."bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-full" href="/logout" { "Logout" }
             }
         }
@@ -88,3 +94,33 @@ impl IntoResponse for AppError {
         (status_code, Html(body.into_string())).into_response()
     }
 }
+
+
+
+
+pub struct ReqwestClient(pub reqwest::Client);
+
+impl<'c> oauth2::AsyncHttpClient<'c> for ReqwestClient {
+    type Error = oauth2::HttpClientError<reqwest::Error>;
+    type Future = Pin<Box<dyn Future<Output = Result<oauth2::HttpResponse, Self::Error>> + Send + Sync + 'c>>;
+
+    fn call(&'c self, request: oauth2::HttpRequest) -> Self::Future {
+        Box::pin(async move {
+            let response = self.0
+                .execute(request.try_into().map_err(Box::new)?)
+                .await
+                .map_err(Box::new)?;
+
+            let mut builder = http::Response::builder().status(response.status());
+
+            for (name, value) in response.headers().iter() {
+                builder = builder.header(name, value);
+            }
+
+            builder
+                .body(response.bytes().await.map_err(Box::new)?.to_vec())
+                .map_err(oauth2::HttpClientError::Http)
+        })
+    }
+}
+

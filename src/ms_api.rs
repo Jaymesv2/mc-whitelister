@@ -41,13 +41,14 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum TokenError {
     #[error("http error: {0}")]
-    Reqwest(#[from] oauth2::reqwest::Error),
+    Reqwest(#[from] reqwest::Error),
     #[error("response parse error: {0}")]
     ResponseParse(#[from] serde_path_to_error::Error<serde_json::error::Error>),
     #[error("sql error {0:?}")]
     Sqlx(#[from] sqlx::Error),
     #[error("Other error: {0}")]
     Other(String),
+
     #[error("no refresh token")]
     NoRefreshToken,
     #[error("invalid refresh token")]

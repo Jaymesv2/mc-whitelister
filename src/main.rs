@@ -21,17 +21,17 @@ use tower_sessions_sqlx_store::PostgresStore;
 
 
 use opentelemetry::global;
-use opentelemetry_otlp::{WithExportConfig, ExporterBuildError};
+use opentelemetry_otlp::ExporterBuildError;
 
 
 
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 use opentelemetry_sdk::{propagation::TraceContextPropagator, trace::SdkTracerProvider};
-use opentelemetry::trace::{Tracer, TracerProvider as _};
-use tracing::{error, span};
+use opentelemetry::trace::{TracerProvider as _};
+// use tracing::{error, span};
 use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::Registry;
+// use tracing_subscriber::Registry;
 
 async fn setup_telemetry() -> Result<(),ExporterBuildError>{
     let otlp_exporter = opentelemetry_otlp::SpanExporter::builder()
@@ -140,7 +140,12 @@ async fn main() {
         .with_signed(Key::from(secret.as_slice()));
 
     let (tx,rx) = tokio::sync::mpsc::channel(10);
+        
     
+    let http_client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .expect("failed to build requesst http client");
 
     // TODO: set the reqwest client in  both api clients to remove duplication
     let state = Arc::new(AppState {
@@ -148,16 +153,19 @@ async fn main() {
             let mut cfg = luckperms_api::apis::configuration::Configuration::new();
             cfg.bearer_access_token = Some(config.luckperms_api_key.clone());
             cfg.base_path = config.luckperms_server.clone();
+            cfg.client = http_client.clone().into();
             cfg
         },
         authentik: {
             let mut cfg = authentik_client::apis::configuration::Configuration::new();
             cfg.bearer_access_token = Some(config.authentik_api_key.clone());
             cfg.base_path = config.authentik_server.clone();
+            cfg.client = http_client.clone().into();
             cfg
         },
         reconcile_req_sender: tx,
         config,
+        http_client,
         pool,
     });
 

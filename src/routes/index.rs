@@ -6,7 +6,6 @@ use axum::{
     extract::State,
     response::{self, IntoResponse, Response},
 };
-use reqwest::StatusCode;
 use serde::*;
 use sqlx::query_as;
 use std::sync::Arc;

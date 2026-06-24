@@ -5,7 +5,6 @@ use axum::{
 };
 
 use crate::session::*;
-use reqwest::StatusCode;
 use tower_sessions::Session;
 use tracing::*;
 
@@ -15,7 +14,6 @@ use std::sync::Arc;
 
 use oauth2::{
     AuthorizationCode, CsrfToken, PkceCodeChallenge, PkceCodeVerifier, Scope, TokenResponse,
-    reqwest,
 };
 
 use crate::ms_api::*;
@@ -95,17 +93,12 @@ pub async fn redirect(
 
     let pkce: PkceCodeVerifier = PkceCodeVerifier::new(exchange_data.pkce);
 
-    // TODO: move into app state
-    let http_client = reqwest::ClientBuilder::new()
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .expect("failed to build http client");
 
     // exchange the token
     let token = client
         .exchange_code(AuthorizationCode::new(code))
         .set_pkce_verifier(pkce)
-        .request_async(&http_client)
+        .request_async(&crate::ReqwestClient(app_state.http_client.clone()))
         .await?;
     // {
     //     Ok(s) => s,
@@ -142,7 +135,7 @@ pub async fn redirect(
         sub.as_str(),
         token.access_token().secret().as_str(),
         &mut tx,
-        &http_client,
+        &app_state.http_client,
     )
     .await
     .expect("failed to update minecraft profile");
