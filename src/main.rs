@@ -18,30 +18,26 @@ use axum_tracing_opentelemetry::middleware::{OtelAxumLayer, OtelInResponseLayer}
 use tower_sessions::session_store::ExpiredDeletion;
 use tower_sessions_sqlx_store::PostgresStore;
 
-
-
 use opentelemetry::global;
 use opentelemetry_otlp::ExporterBuildError;
 
-
-
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
+use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_sdk::{propagation::TraceContextPropagator, trace::SdkTracerProvider};
-use opentelemetry::trace::{TracerProvider as _};
 // use tracing::{error, span};
 use tracing_subscriber::layer::SubscriberExt;
 // use tracing_subscriber::Registry;
 
-async fn setup_telemetry() -> Result<(),ExporterBuildError>{
+async fn setup_telemetry() -> Result<(), ExporterBuildError> {
     let otlp_exporter = opentelemetry_otlp::SpanExporter::builder()
         .with_tonic()
         .build()?;
-        // .expect("failed to create otlp span exporter");
+    // .expect("failed to create otlp span exporter");
 
     // Create a new OpenTelemetry trace pipeline that prints to stdout
     let tracer_provider = SdkTracerProvider::builder()
-        .with_batch_exporter(otlp_exporter)   // was: with_simple_exporter
+        .with_batch_exporter(otlp_exporter) // was: with_simple_exporter
         // .with_resource(Resource::builder().with_service_name("example").build())
         .build();
 
@@ -54,8 +50,6 @@ async fn setup_telemetry() -> Result<(),ExporterBuildError>{
 
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 
-
-
     // Create a tracer provider with the exporter
     // let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
     //     .with_batch_exporter(otlp_exporter)
@@ -63,7 +57,7 @@ async fn setup_telemetry() -> Result<(),ExporterBuildError>{
 
     // // Set it as the global provider
     // global::set_tracer_provider(tracer_provider);
-    
+
     tracing_subscriber::registry()
         .with(telemetry)
         .with(EnvFilter::from_default_env())
@@ -139,9 +133,8 @@ async fn main() {
         .with_same_site(SameSite::None)
         .with_signed(Key::from(secret.as_slice()));
 
-    let (tx,rx) = tokio::sync::mpsc::channel(10);
-        
-    
+    let (tx, rx) = tokio::sync::mpsc::channel(10);
+
     let http_client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .build()
@@ -169,7 +162,7 @@ async fn main() {
         pool,
     });
 
-    let reconcile_task = tokio::spawn( reconcile::reconcile_task(state.clone(), rx) );
+    let reconcile_task = tokio::spawn(reconcile::reconcile_task(state.clone(), rx));
 
     // includes the file in the binary on release but reads from fs in debug
     macro_rules! static_route {
@@ -212,8 +205,8 @@ async fn main() {
         .route("/reconcile", get(routes::reconcile::reconcile))
         .nest("/static", static_router)
         .layer(session_layer)
-        .layer(OtelInResponseLayer::default())  // inject trace context into responses
-        .layer(OtelAxumLayer::default())        // start the span on incoming request
+        .layer(OtelInResponseLayer::default()) // inject trace context into responses
+        .layer(OtelAxumLayer::default()) // start the span on incoming request
         .with_state(state);
 
     let bind_addr = "0.0.0.0:8080";
@@ -224,7 +217,10 @@ async fn main() {
         .unwrap_or_else(|_| panic!("failed to bind to {bind_addr}"));
 
     axum::serve(listener, app.into_make_service())
-        .with_graceful_shutdown(shutdown_signal(deletion_task.abort_handle(), reconcile_task.abort_handle()))
+        .with_graceful_shutdown(shutdown_signal(
+            deletion_task.abort_handle(),
+            reconcile_task.abort_handle(),
+        ))
         .await
         .expect("failed to serve application content");
 
@@ -232,7 +228,10 @@ async fn main() {
 }
 use tokio::task::AbortHandle;
 
-async fn shutdown_signal(deletion_task_abort_handle: AbortHandle, reconcile_task_abort_handle: AbortHandle) {
+async fn shutdown_signal(
+    deletion_task_abort_handle: AbortHandle,
+    reconcile_task_abort_handle: AbortHandle,
+) {
     let ctrl_c = async {
         tokio::signal::ctrl_c()
             .await
@@ -251,11 +250,11 @@ async fn shutdown_signal(deletion_task_abort_handle: AbortHandle, reconcile_task
     let terminate = std::future::pending::<()>();
 
     tokio::select! {
-        _ = ctrl_c => { 
+        _ = ctrl_c => {
             deletion_task_abort_handle.abort();
             reconcile_task_abort_handle.abort();
         },
-        _ = terminate => { 
+        _ = terminate => {
             deletion_task_abort_handle.abort() ;
             reconcile_task_abort_handle.abort();
         },

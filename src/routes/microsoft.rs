@@ -65,10 +65,7 @@ pub async fn redirect(
 ) -> Result<Response, AppError> {
     let client = get_ms_oauth2_client(&app_state.config);
 
-    let Some(user_id): Option<UserID> = session
-        .get(UserID::SESSION_KEY)
-        .await?
-    else {
+    let Some(user_id): Option<UserID> = session.get(UserID::SESSION_KEY).await? else {
         return Ok(response::Redirect::to("/login").into_response());
     };
 
@@ -88,11 +85,10 @@ pub async fn redirect(
     // validate csrf token
     if state != exchange_data.csrf {
         error!("Failed to validate csrf");
-        return Err(AppError::InvalidCSRFToken)
+        return Err(AppError::InvalidCSRFToken);
     }
 
     let pkce: PkceCodeVerifier = PkceCodeVerifier::new(exchange_data.pkce);
-
 
     // exchange the token
     let token = client
@@ -114,7 +110,9 @@ pub async fn redirect(
     let contents: biscuit::JWT<MsClaims, MsClaims> =
         biscuit::JWT::new_encoded(&token.extra_fields().id_token);
 
-    let id_contents: biscuit::ClaimsSet<MsClaims> = contents.unverified_payload().expect("failed to unwrap content");
+    let id_contents: biscuit::ClaimsSet<MsClaims> = contents
+        .unverified_payload()
+        .expect("failed to unwrap content");
     // .unwrap(); // bad
     let sub = id_contents
         .registered
@@ -140,7 +138,7 @@ pub async fn redirect(
     .await
     .expect("failed to update minecraft profile");
 
-    // if let Err(e) = 
+    // if let Err(e) =
     tx.commit().await?;
     // {
     //     error!("Failed to commit to database: {e:?}");
@@ -158,16 +156,19 @@ pub async fn redirect(
     let _ = session
         .remove::<MSOAuthExchangeData>(MSOAuthExchangeData::SESSION_KEY)
         .await?;
-        // .expect("failed to remove ms oauth exchange data from session");
+    // .expect("failed to remove ms oauth exchange data from session");
 
-    app_state.reconcile_req_sender.send(()).await.expect("reconcile request could not be sent when reconcile task is died");
+    app_state
+        .reconcile_req_sender
+        .send(())
+        .await
+        .expect("reconcile request could not be sent when reconcile task is died");
 
     // reconcile when a user is added
     // if let Err(e) = crate::reconcile::reconcile_luckperms(&app_state).await {
     //     warn!("failed to reconcile with error: {e:?}");
     // }
-        // .expect("failed to reconcile");
-
+    // .expect("failed to reconcile");
 
     Ok(response::Redirect::to("/").into_response())
 }

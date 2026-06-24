@@ -5,13 +5,13 @@ pub mod reconcile;
 pub mod routes;
 pub mod session;
 
+use axum::{
+    http::StatusCode,
+    response::{Html, IntoResponse, Response},
+};
 pub use config::*;
 use std::pin::Pin;
 use thiserror::Error;
-use axum::{
-    response::{Html, IntoResponse, Response},
-    http::StatusCode
-};
 // use axum::
 use maud::{Markup, html};
 
@@ -25,9 +25,8 @@ pub struct AppState {
     pub http_client: reqwest::Client,
 }
 
-
 // this represents the top level errors the user may see
-#[derive(Debug,Error)]
+#[derive(Debug, Error)]
 pub enum AppError {
     #[error("Database error")]
     Database(#[from] sqlx::Error),
@@ -39,8 +38,14 @@ pub enum AppError {
     Session(#[from] tower_sessions::session::Error),
 
     #[error("")]
-    Oauth(#[from] oauth2::RequestTokenError<oauth2::HttpClientError<reqwest::Error>, oauth2::StandardErrorResponse<oauth2::basic::BasicErrorResponseType>>),
-    
+    Oauth(
+        #[from]
+        oauth2::RequestTokenError<
+            oauth2::HttpClientError<reqwest::Error>,
+            oauth2::StandardErrorResponse<oauth2::basic::BasicErrorResponseType>,
+        >,
+    ),
+
     #[error("{0}")]
     InvalidAuthentikToken(&'static str),
 
@@ -51,12 +56,14 @@ pub enum AppError {
     InvalidCSRFToken,
 }
 
-
-
-fn render_error_page(status: StatusCode, message: impl AsRef<str>, trace_id: Option<impl AsRef<str>>) -> Markup {
+fn render_error_page(
+    status: StatusCode,
+    message: impl AsRef<str>,
+    trace_id: Option<impl AsRef<str>>,
+) -> Markup {
     crate::routes::index::with_common(
         "Error",
-        html!{
+        html! {
             div {
                 h1 { (format!("{}", status) ) }
                 h2 { (message.as_ref()) }
@@ -65,7 +72,7 @@ fn render_error_page(status: StatusCode, message: impl AsRef<str>, trace_id: Opt
                 }
                 //a ."bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-full" href="/logout" { "Logout" }
             }
-        }
+        },
     )
 
     // with_common(
@@ -82,10 +89,19 @@ impl IntoResponse for AppError {
             AppError::Database(err) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{err}")),
             AppError::Other(err) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{err}")),
             AppError::Session(err) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{err}")),
-            AppError::NoOauthExchangeDataInSession => (StatusCode::FORBIDDEN, format!("No oauth exchange data was present in your session")),
-            AppError::InvalidCSRFToken => (StatusCode::FORBIDDEN, format!("{:?}", AppError::InvalidCSRFToken)),
+            AppError::NoOauthExchangeDataInSession => (
+                StatusCode::FORBIDDEN,
+                format!("No oauth exchange data was present in your session"),
+            ),
+            AppError::InvalidCSRFToken => (
+                StatusCode::FORBIDDEN,
+                format!("{:?}", AppError::InvalidCSRFToken),
+            ),
             AppError::Oauth(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{e:?}")),
-            AppError::InvalidAuthentikToken(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Invalid token received from authentik: {e}")),
+            AppError::InvalidAuthentikToken(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Invalid token received from authentik: {e}"),
+            ),
         };
 
         // show the reference id for server errors (where you'd actually go look it up)
@@ -95,18 +111,17 @@ impl IntoResponse for AppError {
     }
 }
 
-
-
-
 pub struct ReqwestClient(pub reqwest::Client);
 
 impl<'c> oauth2::AsyncHttpClient<'c> for ReqwestClient {
     type Error = oauth2::HttpClientError<reqwest::Error>;
-    type Future = Pin<Box<dyn Future<Output = Result<oauth2::HttpResponse, Self::Error>> + Send + Sync + 'c>>;
+    type Future =
+        Pin<Box<dyn Future<Output = Result<oauth2::HttpResponse, Self::Error>> + Send + Sync + 'c>>;
 
     fn call(&'c self, request: oauth2::HttpRequest) -> Self::Future {
         Box::pin(async move {
-            let response = self.0
+            let response = self
+                .0
                 .execute(request.try_into().map_err(Box::new)?)
                 .await
                 .map_err(Box::new)?;
@@ -123,4 +138,3 @@ impl<'c> oauth2::AsyncHttpClient<'c> for ReqwestClient {
         })
     }
 }
-

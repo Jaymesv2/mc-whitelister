@@ -16,13 +16,13 @@ use crate::*;
 use serde::*;
 use sqlx::query;
 
+use crate::AppError;
 use sqlx::query_as;
 use std::sync::Arc;
-use crate::AppError;
 
 use oauth2::{
     AuthorizationCode, CsrfToken, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope,
-    TokenResponse
+    TokenResponse,
 };
 
 const OAUTH_REDIRECT_PATH: &str = "/oauth/redirect";
@@ -49,7 +49,6 @@ type AuthentikOAuthClient = Client<
 >;
 // this is certainly a type
 fn get_oauth2_client(conf: &crate::Config) -> AuthentikOAuthClient {
-
     let redirect_url = conf
         .host_url
         .join(OAUTH_REDIRECT_PATH)
@@ -98,9 +97,6 @@ pub struct RedirectParams {
 //     }
 // }
 
-
-
-
 pub async fn redirect(
     session: Session,
     State(app_state): State<Arc<AppState>>,
@@ -111,14 +107,14 @@ pub async fn redirect(
     info!("serving request with session id: {:?}", session.id());
     let exchange_data = session
         .get::<OAuthExchangeData>(OAuthExchangeData::SESSION_KEY)
-        .await?.ok_or(AppError::NoOauthExchangeDataInSession)?;
+        .await?
+        .ok_or(AppError::NoOauthExchangeDataInSession)?;
     //     error!("failed to find oauth_pkce in session");
 
     if exchange_data.csrf != state {
         error!("failed to verify csrf token");
         return Err(AppError::InvalidCSRFToken);
     }
-    
 
     let token_result = client
         .exchange_code(AuthorizationCode::new(code))
@@ -126,7 +122,7 @@ pub async fn redirect(
         .set_pkce_verifier(PkceCodeVerifier::new(exchange_data.pkce))
         .request_async(&crate::ReqwestClient(app_state.http_client.clone()))
         .await?;
-        // .expect("failed to exchange code for tokens");
+    // .expect("failed to exchange code for tokens");
 
     //error!("{:?}", token_result.extra_fields());
 
@@ -155,30 +151,44 @@ pub async fn redirect(
     // let id_contents: biscuit::ClaimsSet<Claims> = contents.unverified_payload().unwrap(); // bad
     // let sub = userinfo.registered.subject.expect("microsoft did not provide subject in id token");
 
-    let subject = token_contents.registered.subject.ok_or(AppError::InvalidAuthentikToken("subject was missing"))?;
+    let subject = token_contents
+        .registered
+        .subject
+        .ok_or(AppError::InvalidAuthentikToken("subject was missing"))?;
     // else {
     //     error!("access token didn't contain subject");
     //     return Err(StatusCode::INTERNAL_SERVER_ERROR);
     // };
 
-    let username = token_contents.private.name.ok_or(AppError::InvalidAuthentikToken("name was missing"))?;
+    let username = token_contents
+        .private
+        .name
+        .ok_or(AppError::InvalidAuthentikToken("name was missing"))?;
     // else {
     //     error!("access token didn't contain name");
     //     return Err(StatusCode::INTERNAL_SERVER_ERROR);
     // };
 
-    let exp_odt = token_contents.registered.expiry.map(|s| {
-        OffsetDateTime::from_unix_timestamp(s.timestamp()).expect("failed to convert timestamp")
-    }).ok_or(AppError::InvalidAuthentikToken("expiry was missing"))?;
+    let exp_odt = token_contents
+        .registered
+        .expiry
+        .map(|s| {
+            OffsetDateTime::from_unix_timestamp(s.timestamp()).expect("failed to convert timestamp")
+        })
+        .ok_or(AppError::InvalidAuthentikToken("expiry was missing"))?;
     // else {
     //     error!("access token didn't contain expiry");
     //     return Err(StatusCode::INTERNAL_SERVER_ERROR);
     // };
     let exp = exp_odt.date().with_time(exp_odt.time());
 
-    let iat_odt = token_contents.registered.issued_at.map(|s| {
-        OffsetDateTime::from_unix_timestamp(s.timestamp()).expect("failed to convert timestamp")
-    }).ok_or(AppError::InvalidAuthentikToken("issued at was missing"))?;
+    let iat_odt = token_contents
+        .registered
+        .issued_at
+        .map(|s| {
+            OffsetDateTime::from_unix_timestamp(s.timestamp()).expect("failed to convert timestamp")
+        })
+        .ok_or(AppError::InvalidAuthentikToken("issued at was missing"))?;
     // else {
     //     error!("access token didn't contain issued at");
     //     return Err(StatusCode::INTERNAL_SERVER_ERROR);
@@ -215,8 +225,7 @@ pub async fn redirect(
     // previous code
     #[allow(clippy::nonminimal_bool)]
     if !user_query.is_some_and(|s| s.name == username) {
-
-            query!(
+        query!(
             "INSERT INTO users(id, name) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET name=$2;",
             subject,
             username,
@@ -252,7 +261,7 @@ pub async fn redirect(
         .await?;
     }
 
-        tx.commit().await?;
+    tx.commit().await?;
     session
         .remove::<OAuthExchangeData>(OAuthExchangeData::SESSION_KEY)
         .await?;
@@ -301,7 +310,7 @@ pub async fn login(
         // Set the PKCE code challenge.
         builder.set_pkce_challenge(pkce_challenge).url()
     };
-    // let Ok(_) = 
+    // let Ok(_) =
     let _ = session
         .insert(
             OAuthExchangeData::SESSION_KEY,

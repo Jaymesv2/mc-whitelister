@@ -23,15 +23,12 @@ pub struct RemoveBody {
     pub uuid: String,
 }
 
-
-
 // TODO: the error handling here needs to be updated.
 pub async fn remove(
     session: Session,
     State(app_state): State<Arc<AppState>>,
     Path(uuid): Path<String>,
 ) -> Result<Response, StatusCode> {
-
     let Some(user_id): Option<UserID> = session
         .get(UserID::SESSION_KEY)
         .await

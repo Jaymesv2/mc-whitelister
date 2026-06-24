@@ -19,21 +19,19 @@ use luckperms_api::apis::users_api::{
 };
 use thiserror::Error;
 
-
 use tokio::sync::mpsc::Receiver;
 
-
 pub async fn reconcile_task(state: Arc<AppState>, mut rx: Receiver<()>) {
-    use tokio::time::timeout;
     use std::time::Duration;
+    use tokio::time::timeout;
     info!("starting reconcile task");
     loop {
-        match timeout(Duration::from_mins(15), rx.recv() ).await {
+        match timeout(Duration::from_mins(15), rx.recv()).await {
             Ok(None) => {
                 warn!("reconcile receiver has been dropped");
                 break;
-            },
-            Err(_) => {},
+            }
+            Err(_) => {}
             Ok(Some(_req)) => {
                 // this should set a trace context or something
             }
@@ -44,7 +42,6 @@ pub async fn reconcile_task(state: Arc<AppState>, mut rx: Receiver<()>) {
         };
     }
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Account {
@@ -58,7 +55,6 @@ pub struct ResponseAccount {
     uuid: Uuid,
     username: String,
 }
-
 
 #[derive(Debug, Error)]
 pub enum ReconcileErrors {

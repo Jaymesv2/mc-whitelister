@@ -92,10 +92,7 @@ pub async fn index(
     State(state): State<Arc<AppState>>,
 ) -> Result<Response, AppError> {
     info!("index");
-    let Some(user_id): Option<UserID> = session
-        .get(UserID::SESSION_KEY)
-        .await?
-    else {
+    let Some(user_id): Option<UserID> = session.get(UserID::SESSION_KEY).await? else {
         return Ok(response::Redirect::to("/login").into_response());
     };
 
