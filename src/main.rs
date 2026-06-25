@@ -156,7 +156,7 @@ async fn main() {
             let mut cfg = luckperms_api::apis::configuration::Configuration::new();
             cfg.bearer_access_token = Some(config.luckperms_api_key.clone());
             cfg.base_path = config.luckperms_server.clone();
-            cfg.client = http_client.clone();
+            cfg.client = http_client.clone().into();
             cfg
         },
         authentik: {
