@@ -22,8 +22,8 @@ pub struct MicrosoftExtraFields {
     // pub user_id: String,
     pub id_token: String,
 }
-impl ExtraTokenFields for MicrosoftExtraFields {}
 
+impl ExtraTokenFields for MicrosoftExtraFields {}
 use std::sync::LazyLock;
 
 pub static MS_GRAPH_AUTH_URL: LazyLock<AuthUrl> = LazyLock::new(|| {
@@ -128,6 +128,7 @@ pub async fn update_mc_profile_from_ms_token(
 pub enum XboxApiError {
     #[error("help")]
     HttpError(#[from] reqwest::Error),
+
     #[error("forbidden: {body}")]
     Forbidden { body: String },
     #[error("non 200 status code")]

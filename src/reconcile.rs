@@ -21,20 +21,21 @@ use thiserror::Error;
 
 use tokio::sync::mpsc::Receiver;
 
-pub async fn reconcile_task(state: Arc<AppState>, mut rx: Receiver<()>) {
+pub async fn reconcile_task(state: Arc<AppState>, mut rx: Receiver<Option<tracing::span::Id>>) {
     use std::time::Duration;
     use tokio::time::timeout;
     info!("starting reconcile task");
     loop {
         match timeout(Duration::from_mins(15), rx.recv()).await {
             Ok(None) => {
-                warn!("reconcile receiver has been dropped");
+                error!("reconcile receiver has been dropped, ending task");
                 break;
             }
             Err(_) => {}
-            Ok(Some(_req)) => {
-                // this should set a trace context or something
-            }
+            // set this spans follows from since it was requested
+            Ok(Some(span_id)) => {
+                tracing::span::Span::current().follows_from(span_id);
+            },
         }
         let res = reconcile_luckperms(&state).await;
         if let Err(e) = res {
@@ -301,10 +302,12 @@ async fn get_authentik_groups(
                 info!("skipping group {}, attributes were empty", group.name);
                 return None;
             };
+
             let Some(luckperms_data) = attrs.get("luckperms") else {
                 info!("skipping group {}, no \"luckperms\" attribute", group.name);
                 return None;
             };
+
             let luckperms_data = match serde_json::from_value::<AuthentikLuckpermsGroupAttribute>(
                 luckperms_data.clone(),
             ) {

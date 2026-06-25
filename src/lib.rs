@@ -21,7 +21,7 @@ pub struct AppState {
     pub pool: sqlx::postgres::PgPool,
     pub luckperms: luckperms_api::apis::configuration::Configuration,
     pub authentik: authentik_client::apis::configuration::Configuration,
-    pub reconcile_req_sender: tokio::sync::mpsc::Sender<()>,
+    pub reconcile_req_sender: tokio::sync::mpsc::Sender<Option<tracing::span::Id>>,
     pub http_client: reqwest::Client,
 }
 

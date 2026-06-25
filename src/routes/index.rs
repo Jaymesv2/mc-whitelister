@@ -114,19 +114,15 @@ pub async fn index(
         }
     };
 
-    let accounts: Vec<Account> = match sqlx::query_as!(
+    let accounts: Vec<Account> = sqlx::query_as!(
             Account,
             "SELECT microsoft_id, uuid, username, skin_id, skin_url FROM minecraft_profile WHERE user_id = $1",
             user_id.0
         )
         .fetch_all(&mut *conn)
-        .await {
-            Ok(s) => s,
-            Err(e) => {
-                error!("Failed to get user accounts: {e:?}");
-                return Err(e.into());
-            }
-        };
+        .await
+        .inspect_err(|e| error!("Failed to get user accounts: {e}"))
+        ?;
 
     Ok(axum::response::Html(main_page(account, accounts).into_string()).into_response())
 }

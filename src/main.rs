@@ -224,7 +224,9 @@ async fn main() {
         .await
         .expect("failed to serve application content");
 
-    // deletion_task.await.unwrap().unwrap();
+    deletion_task.await.unwrap().unwrap();
+    reconcile_task.await.unwrap();
+
 }
 use tokio::task::AbortHandle;
 

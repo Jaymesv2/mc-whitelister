@@ -79,7 +79,8 @@ pub async fn redirect(
     // should add logging here
     let exchange_data = session
         .get::<MSOAuthExchangeData>(MSOAuthExchangeData::SESSION_KEY)
-        .await?
+        .await
+        .inspect_err(|e| error!("session error occured while getting oauth exchange data {e:?}"))?
         .ok_or(AppError::NoOauthExchangeDataInSession)?;
 
     // validate csrf token
@@ -95,14 +96,8 @@ pub async fn redirect(
         .exchange_code(AuthorizationCode::new(code))
         .set_pkce_verifier(pkce)
         .request_async(&crate::ReqwestClient(app_state.http_client.clone()))
-        .await?;
-    // {
-    //     Ok(s) => s,
-    //     Err(e) => {
-    //         error!("error occured while exchaging token: {e:?}");
-    //         return Err(StatusCode::INTERNAL_SERVER_ERROR);
-    //     }
-    // };
+        .await
+        .inspect_err(|e| error!("error occured while exchaging token: {e:?}"))?;
 
     // The id token should be verified using microsofts jwks
     #[derive(Debug, Serialize, Deserialize)]
@@ -110,23 +105,19 @@ pub async fn redirect(
     let contents: biscuit::JWT<MsClaims, MsClaims> =
         biscuit::JWT::new_encoded(&token.extra_fields().id_token);
 
+
     let id_contents: biscuit::ClaimsSet<MsClaims> = contents
         .unverified_payload()
         .expect("failed to unwrap content");
+
     // .unwrap(); // bad
     let sub = id_contents
         .registered
         .subject
         .expect("microsoft did not provide subject in id token");
 
-    let mut tx = app_state.pool.begin().await?;
-    // {
-    //     Ok(s) => s,
-    //     Err(e) => {
-    //         error!("Error starting transaction {e:?}");
-    //         return Err(StatusCode::INTERNAL_SERVER_ERROR);
-    //     }
-    // };
+    let mut tx = app_state.pool.begin().await
+        .inspect_err(|e| error!("Error starting transaction {e:?}"))?;
 
     update_mc_profile_from_ms_token(
         &user_id.0,
@@ -136,75 +127,22 @@ pub async fn redirect(
         &app_state.http_client,
     )
     .await
-    .expect("failed to update minecraft profile");
+    .inspect_err(|e| error!("Failed to update minecraft profile: {e}"))?;
 
-    // if let Err(e) =
-    tx.commit().await?;
-    // {
-    //     error!("Failed to commit to database: {e:?}");
-    //     return Err(StatusCode::INTERNAL_SERVER_ERROR);
-    // }
-
-    // if let Ok(s) = MicrosoftRefreshToken::try_from(token.clone()) {
-    //     if let Err(e) = insert_ms_refresh_token(&mut *tx, s).await {
-    //         error!("error occured while inserting into `microsoft_account`: {e:?}");
-    //         return Err(StatusCode::INTERNAL_SERVER_ERROR);
-    //     };
-    // }
+    tx.commit().await.inspect_err(|e| error!("Failed to commit to database: {e:?}"))?;
 
     //query
     let _ = session
         .remove::<MSOAuthExchangeData>(MSOAuthExchangeData::SESSION_KEY)
-        .await?;
-    // .expect("failed to remove ms oauth exchange data from session");
+        .await
+        .inspect_err(|e| error!("failed to remove ms oauth exchange data from session {e}"))?;
 
     app_state
         .reconcile_req_sender
-        .send(())
+        .send(tracing::Span::current().id())
         .await
         .expect("reconcile request could not be sent when reconcile task is died");
-
-    // reconcile when a user is added
-    // if let Err(e) = crate::reconcile::reconcile_luckperms(&app_state).await {
-    //     warn!("failed to reconcile with error: {e:?}");
-    // }
-    // .expect("failed to reconcile");
 
     Ok(response::Redirect::to("/").into_response())
 }
 
-// pub async fn update_mc_profile(
-//     session: Session<SessionPgPool>,
-//     State(app_state): State<Arc<AppState>>,
-// ) -> Result<Response, StatusCode> {
-//
-//     let Some(user_id): Option<String> = session.get("user_id") else {
-//         warn!("user id could not be found");
-//         return Ok(Redirect::to("/").into_response());
-//     };
-//
-//     let Ok(mut conn) = app_state.pool.acquire().await else {
-//         error!("failed to get db conn");
-//         return Err(StatusCode::INTERNAL_SERVER_ERROR);
-//     };
-//
-//     let account = match query_as!(MicrosoftAccount, "SELECT * from microsoft_account WHERE user_id = $1;", user_id).fetch_one(&mut *conn).await {
-//         Ok(s) => s,
-//         Err(e) => {
-//             error!("failed to get microsoft account: {e:?}");
-//             return Err(StatusCode::INTERNAL_SERVER_ERROR);
-//         }
-//     };
-//
-//     //let http_client = reqwest::Client::new();
-//
-//     if let Err(e) =
-//     update_mc_profile_from_db(&account.microsoft_id, &mut conn, &app_state.config).await
-//     {
-//         error!("Failed to update mc profile: {e:?}");
-//         return Err(StatusCode::INTERNAL_SERVER_ERROR);
-//     };
-//
-//     //Ok(response::Redirect::to("/").into_response())
-//     Ok("success".into_response())
-// }

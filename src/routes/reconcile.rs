@@ -15,7 +15,7 @@ pub async fn reconcile(
     {
         state
             .reconcile_req_sender
-            .send(())
+            .send(tracing::Span::current().id())
             .await
             .expect("reconcile request could not be sent when reconcile task is died");
         Ok(String::from("Ok").into_response())
