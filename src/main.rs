@@ -12,6 +12,9 @@ use oauth_bridge::{
 };
 use rand::Rng;
 use std::sync::Arc;
+use reqwest_middleware::ClientBuilder;
+use reqwest_tracing::TracingMiddleware;
+
 
 
 // use axum_tracing_opentelemetry::middleware::{OtelAxumLayer, OtelInResponseLayer};
@@ -150,25 +153,32 @@ async fn main() {
         .expect("failed to build requesst http client");
 
 
+    let traced_http_client = ClientBuilder::new(http_client.clone())
+        .with(TracingMiddleware::default())
+        .build();
+
+
     // TODO: set the reqwest client in  both api clients to remove duplication
     let state = Arc::new(AppState {
         luckperms: {
             let mut cfg = luckperms_api::apis::configuration::Configuration::new();
             cfg.bearer_access_token = Some(config.luckperms_api_key.clone());
             cfg.base_path = config.luckperms_server.clone();
-            cfg.client = http_client.clone().into();
+            cfg.client = traced_http_client.clone();
+                //http_client.clone().into();
             cfg
         },
         authentik: {
             let mut cfg = authentik_client::apis::configuration::Configuration::new();
             cfg.bearer_access_token = Some(config.authentik_api_key.clone());
             cfg.base_path = config.authentik_server.clone();
-            cfg.client = http_client.clone().into();
+            cfg.client = traced_http_client.clone();
+                //http_client.clone().into();
             cfg
         },
         reconcile_req_sender: tx,
         config,
-        http_client,
+        http_client: traced_http_client,
         pool,
     });
 

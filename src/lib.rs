@@ -22,7 +22,7 @@ pub struct AppState {
     pub luckperms: luckperms_api::apis::configuration::Configuration,
     pub authentik: authentik_client::apis::configuration::Configuration,
     pub reconcile_req_sender: tokio::sync::mpsc::Sender<Option<tracing::span::Id>>,
-    pub http_client: reqwest::Client,
+    pub http_client: reqwest_middleware::ClientWithMiddleware,
 }
 
 // this represents the top level errors the user may see
@@ -41,7 +41,7 @@ pub enum AppError {
     Oauth(
         #[from]
         oauth2::RequestTokenError<
-            oauth2::HttpClientError<reqwest::Error>,
+            oauth2::HttpClientError<reqwest_middleware::Error>,
             oauth2::StandardErrorResponse<oauth2::basic::BasicErrorResponseType>,
         >,
     ),
@@ -111,18 +111,17 @@ impl IntoResponse for AppError {
     }
 }
 
-pub struct ReqwestClient(pub reqwest::Client);
+pub struct ReqwestClient(pub reqwest_middleware::ClientWithMiddleware);
 
 impl<'c> oauth2::AsyncHttpClient<'c> for ReqwestClient {
-    type Error = oauth2::HttpClientError<reqwest::Error>;
-    type Future =
-        Pin<Box<dyn Future<Output = Result<oauth2::HttpResponse, Self::Error>> + Send + Sync + 'c>>;
+    type Error = oauth2::HttpClientError<reqwest_middleware::Error>;
+    type Future = Pin<Box<dyn Future<Output = Result<oauth2::HttpResponse, Self::Error>> + Send + 'c>>;
 
     fn call(&'c self, request: oauth2::HttpRequest) -> Self::Future {
         Box::pin(async move {
             let response = self
                 .0
-                .execute(request.try_into().map_err(Box::new)?)
+                .execute(request.try_into().map_err(reqwest_middleware::Error::Reqwest).map_err(Box::new)?)
                 .await
                 .map_err(Box::new)?;
 
@@ -133,7 +132,9 @@ impl<'c> oauth2::AsyncHttpClient<'c> for ReqwestClient {
             }
 
             builder
-                .body(response.bytes().await.map_err(Box::new)?.to_vec())
+                .body(response.bytes().await
+                    .map_err(reqwest_middleware::Error::Reqwest)
+                    .map_err(Box::new)?.to_vec())
                 .map_err(oauth2::HttpClientError::Http)
         })
     }

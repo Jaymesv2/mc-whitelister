@@ -23,6 +23,7 @@ tracing-subscriber = {version = "0.3", features = ["env-filter"]}
 tracing-opentelemetry  = "0.33"
 opentelemetry =  "0.32"
 opentelemetry_sdk = "0.32"
+opentelemetry-http = "0.32.0"
 opentelemetry-otlp = {version = "0.32", default-features = false, features = ["internal-logs", "logs", "metrics", "trace", "grpc-tonic"]}
 opentelemetry-semantic-conventions = "0.32"
 
@@ -47,8 +48,12 @@ authentik-client = {version = "2026.2.1",  default-features = false, features = 
 # async-redis-session = "0.2"
 # axum-sessions = "0.6"
 reqwest = {version = "0.13", default-features = false, features = [ "charset",  "http2", "system-proxy", "json", "multipart", "rustls" ] }
+reqwest-tracing = {version = "0.7", features = ["opentelemetry_0_32"]}
+reqwest-middleware = "0.5"
+
 oauth2 = {version = "5.0", default-features = false}
 http = "1.4"
+tower-http = {version = "0.7.0", features = ["trace"]}
 
 
 uuid = "1.23.3"
@@ -65,4 +70,6 @@ anyhow = "1"
 base64 = "0.22"
 thiserror = "2"
 serde_path_to_error = "0.1"
-axum-tracing-opentelemetry = "0.38.0"
+
+# axum-tracing-opentelemetry = "0.38.0"
+backoff = {version = "0.4.0", features = ["tokio"]}

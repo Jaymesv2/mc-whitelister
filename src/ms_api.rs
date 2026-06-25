@@ -36,6 +36,7 @@ pub static MS_GRAPH_TOKEN_URL: LazyLock<TokenUrl> = LazyLock::new(|| {
         .expect("Invalid token endpoint URL")
 });
 
+use reqwest_middleware::ClientWithMiddleware;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -92,7 +93,7 @@ pub async fn update_mc_profile_from_ms_token(
     microsoft_id: &str,
     ms_access_token: &str,
     conn: &mut PgConnection,
-    client: &reqwest::Client,
+    client: &ClientWithMiddleware,
 ) -> Result<models::McProfileResponseSuccess, anyhow::Error> {
     let (_, xbox_token) = get_xbox_token(ms_access_token, client).await?;
     info!("got xbox token");
@@ -127,7 +128,7 @@ pub async fn update_mc_profile_from_ms_token(
 #[derive(Error, Debug)]
 pub enum XboxApiError {
     #[error("help")]
-    HttpError(#[from] reqwest::Error),
+    HttpError(#[from] reqwest_middleware::Error),
 
     #[error("forbidden: {body}")]
     Forbidden { body: String },
@@ -139,7 +140,7 @@ pub enum XboxApiError {
 
 pub async fn get_xbox_token(
     ms_access_token: &str,
-    client: &reqwest::Client,
+    client: &ClientWithMiddleware,
 ) -> Result<(String, String), XboxApiError> {
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -171,13 +172,13 @@ pub async fn get_xbox_token(
         StatusCode::OK => {}
         StatusCode::FORBIDDEN | StatusCode::UNAUTHORIZED => {
             return Err(XboxApiError::Forbidden {
-                body: res.text().await?,
+                body: res.text().await.map_err(reqwest_middleware::Error::Reqwest)?,
             });
         }
         status => return Err(XboxApiError::OtherStatus(status)),
     }
 
-    match res.json::<models::XBLResponse>().await? {
+    match res.json::<models::XBLResponse>().await.map_err(reqwest_middleware::Error::Reqwest)? {
         models::XBLResponse::Success(s) => Ok((s.display_claims.xui[0].uhs.clone(), s.token)),
         models::XBLResponse::Error(e) => Err(XboxApiError::ApiError(e)),
     }
@@ -185,7 +186,7 @@ pub async fn get_xbox_token(
 
 async fn get_xsts_token(
     xbox_access_token: &str,
-    client: &reqwest::Client,
+    client: &ClientWithMiddleware,
 ) -> Result<(String, String), XboxApiError> {
     let mut headers = HeaderMap::new();
     // make these static
@@ -213,7 +214,7 @@ async fn get_xsts_token(
         .await?;
 
     match res.status() {
-        StatusCode::OK => match res.json::<models::XBLResponse>().await? {
+        StatusCode::OK => match res.json::<models::XBLResponse>().await.map_err(reqwest_middleware::Error::Reqwest)? {
             models::XBLResponse::Success(s) => Ok((
                 s.display_claims
                     .xui
@@ -226,7 +227,7 @@ async fn get_xsts_token(
             models::XBLResponse::Error(e) => Err(XboxApiError::ApiError(e)),
         },
         StatusCode::FORBIDDEN | StatusCode::UNAUTHORIZED => Err(XboxApiError::Forbidden {
-            body: res.text().await?,
+            body: res.text().await.map_err(reqwest_middleware::Error::Reqwest)?,
         }),
         status => Err(XboxApiError::OtherStatus(status)),
     }
@@ -235,7 +236,7 @@ async fn get_xsts_token(
 #[derive(Error, Debug)]
 pub enum MinecraftApiError {
     #[error("http error {0}")]
-    HttpError(#[from] reqwest::Error),
+    HttpError(#[from] reqwest_middleware::Error),
     #[error("forbidden: {body}")]
     Forbidden { body: String },
     #[error("Unexpected status code returned: {0}")]
@@ -250,7 +251,7 @@ pub enum MinecraftApiError {
 async fn get_minecraft_token(
     user_hash: &str,
     xsts_access_token: &str,
-    client: &reqwest::Client,
+    client: &ClientWithMiddleware,
 ) -> Result<(String, i32), MinecraftApiError> {
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -271,19 +272,21 @@ async fn get_minecraft_token(
         }))
         .send()
         .instrument(info_span!("POST https://api.minecraftservices.com/authentication/login_with_xbox"))
-        .await?;
+        .await
+        // .map_err(reqwest_middleware::Error::Reqwest)
+        ?;
 
     match res.status() {
         StatusCode::OK => {}
         StatusCode::FORBIDDEN | StatusCode::UNAUTHORIZED => {
             return Err(MinecraftApiError::Forbidden {
-                body: res.text().await?,
+                body: res.text().await.map_err(reqwest_middleware::Error::Reqwest)?,
             });
         }
         status => return Err(MinecraftApiError::UnexpectedStatus(status)),
     }
 
-    match res.json::<models::McResponse>().await? {
+    match res.json::<models::McResponse>().await.map_err(reqwest_middleware::Error::Reqwest)? {
         models::McResponse::Success(s) => Ok((s.access_token, s.expires_in)),
         models::McResponse::Error(e) => Err(MinecraftApiError::ApiError(e)),
     }
@@ -291,7 +294,7 @@ async fn get_minecraft_token(
 
 async fn get_minecraft_profile(
     minecraft_access_token: &str,
-    client: &reqwest::Client,
+    client: &ClientWithMiddleware,
 ) -> Result<models::McProfileResponseSuccess, MinecraftApiError> {
     let res = client
         .get("https://api.minecraftservices.com/minecraft/profile")
@@ -304,7 +307,7 @@ async fn get_minecraft_profile(
         StatusCode::OK => {}
         StatusCode::FORBIDDEN | StatusCode::UNAUTHORIZED => {
             return Err(MinecraftApiError::Forbidden {
-                body: res.text().await?,
+                body: res.text().await.map_err(reqwest_middleware::Error::Reqwest)?,
             });
         }
         StatusCode::NOT_FOUND => {
@@ -313,7 +316,7 @@ async fn get_minecraft_profile(
         status => return Err(MinecraftApiError::UnexpectedStatus(status)),
     }
 
-    match res.json::<models::McProfileResponse>().await? {
+    match res.json::<models::McProfileResponse>().await.map_err(reqwest_middleware::Error::Reqwest)? {
         models::McProfileResponse::Success(s) => Ok(s),
         models::McProfileResponse::Error(_e) => todo!(), //Err(MinecraftApiError::ApiError(e)),
     }
