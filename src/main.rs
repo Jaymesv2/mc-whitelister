@@ -1,4 +1,4 @@
-use axum::{Router, routing::*};
+use axum::{Router, routing::*, extract::MatchedPath, http::Request};
 
 use tower_sessions::{
     SessionManagerLayer,
@@ -13,12 +13,14 @@ use oauth_bridge::{
 use rand::Rng;
 use std::sync::Arc;
 
-use axum_tracing_opentelemetry::middleware::{OtelAxumLayer, OtelInResponseLayer};
+
+// use axum_tracing_opentelemetry::middleware::{OtelAxumLayer, OtelInResponseLayer};
 
 use tower_sessions::session_store::ExpiredDeletion;
 use tower_sessions_sqlx_store::PostgresStore;
 
 use opentelemetry::global;
+// use opentelemetry::propagation::Extractor;
 use opentelemetry_otlp::ExporterBuildError;
 
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
@@ -27,7 +29,14 @@ use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_sdk::{propagation::TraceContextPropagator, trace::SdkTracerProvider};
 // use tracing::{error, span};
 use tracing_subscriber::layer::SubscriberExt;
+use opentelemetry_http::HeaderExtractor;
 // use tracing_subscriber::Registry;
+//
+
+
+use tower_http::trace::TraceLayer;
+use tracing::{info_span, field};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 async fn setup_telemetry() -> Result<(), ExporterBuildError> {
     let otlp_exporter = opentelemetry_otlp::SpanExporter::builder()
@@ -140,6 +149,7 @@ async fn main() {
         .build()
         .expect("failed to build requesst http client");
 
+
     // TODO: set the reqwest client in  both api clients to remove duplication
     let state = Arc::new(AppState {
         luckperms: {
@@ -179,6 +189,42 @@ async fn main() {
         }
     }
 
+    let trace_layer = TraceLayer::new_for_http().make_span_with(|req: &Request<_>| {
+        let route = req
+            .extensions()
+            .get::<MatchedPath>()
+            .map(|m| m.as_str())
+            .unwrap_or_else(|| req.uri().path())
+            .to_owned();
+
+        let span = info_span!(
+            "http_request",
+            otel.name = field::Empty,
+            otel.kind = "server",
+            otel.status_code = field::Empty,
+            http.request.method = %req.method(),
+            http.route = %route,
+            http.response.status_code = field::Empty,
+        );
+        // dynamic, low-cardinality span name like "GET /reconcile/{id}"
+        span.record("otel.name", format!("{} {}", req.method(), route).as_str());
+
+        // the actual W3C extraction
+        let parent = global::get_text_map_propagator(|prop| {
+            prop.extract(&HeaderExtractor(req.headers()))
+        });
+        span.set_parent(parent);
+
+        span
+    })
+    .on_response(|res: &http::Response<_>, _lat: std::time::Duration, span: &tracing::Span| {
+        span.record("http.response.status_code", res.status().as_u16());
+        if res.status().is_server_error() {
+            span.record("otel.status_code", "ERROR"); // marks the OTel span status as error
+        }
+    })
+    ;
+
     let static_router = Router::new()
         .route(
             "/scripts.js",
@@ -205,8 +251,7 @@ async fn main() {
         .route("/reconcile", get(routes::reconcile::reconcile))
         .nest("/static", static_router)
         .layer(session_layer)
-        .layer(OtelInResponseLayer) // inject trace context into responses
-        .layer(OtelAxumLayer::default()) // start the span on incoming request
+        .layer(trace_layer)
         .with_state(state);
 
     let bind_addr = "0.0.0.0:8080";

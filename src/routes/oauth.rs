@@ -47,6 +47,7 @@ type AuthentikOAuthClient = Client<
     EndpointNotSet,
     EndpointSet,
 >;
+
 // this is certainly a type
 fn get_oauth2_client(conf: &crate::Config) -> AuthentikOAuthClient {
     let redirect_url = conf
@@ -105,13 +106,15 @@ pub async fn redirect(
     let client = get_oauth2_client(&app_state.config);
 
     info!("serving request with session id: {:?}", session.id());
+
     let exchange_data = session
         .get::<OAuthExchangeData>(OAuthExchangeData::SESSION_KEY)
+        .instrument(info_span!("Session Lookup"))
         .await?
         .ok_or(AppError::NoOauthExchangeDataInSession)?;
 
     if exchange_data.csrf != state {
-        error!("failed to verify csrf token");
+        info!("Invalid csrf token");
         return Err(AppError::InvalidCSRFToken);
     }
 
@@ -120,8 +123,9 @@ pub async fn redirect(
         // Set the PKCE code verifier.
         .set_pkce_verifier(PkceCodeVerifier::new(exchange_data.pkce))
         .request_async(&crate::ReqwestClient(app_state.http_client.clone()))
+        .instrument(info_span!("Oauth Code Exchange"))
         .await
-        .inspect_err(|e| error!("Oauth token exchange error {e}"))?;
+        .inspect_err(|e| info!("Oauth token exchange error {e}"))?;
 
     // #[derive(Debug, Serialize, Deserialize)]
     // struct MsClaims { }
@@ -176,18 +180,21 @@ pub async fn redirect(
 
     session
         .insert(UserID::SESSION_KEY, UserID(subject.clone()))
+        .instrument(info_span!("Session Insert"))
         .await?;
 
     let mut tx = app_state
         .pool
         .begin()
+        .instrument(info_span!("BEGIN"))
         .await
-        .inspect_err(|e| error!("failed to start transaction: {e:?}"))?;
+        .inspect_err(|e| info!("failed to start transaction: {e:?}"))?;
 
     let user_query = query_as!(db::User, "SELECT * FROM users WHERE id = $1", subject)
         .fetch_optional(&mut *tx)
+        .instrument(info_span!("SELECT users"))
         .await
-        .inspect_err(|e| error!("database error while searching for user {e}"))?;
+        .inspect_err(|e| info!("database error while searching for user {e}"))?;
 
     // detect if this is a login or a new account
     let new_account = user_query.is_none();
@@ -199,6 +206,7 @@ pub async fn redirect(
             username,
         )
         .execute(&mut *tx)
+        .instrument(info_span!("INSERT users"))
         .await
         .inspect_err(|e| error!("database error while inserting new user data: {e}"))?;
     }
@@ -212,6 +220,7 @@ pub async fn redirect(
         exp
     )
     .execute(&mut *tx)
+    .instrument(info_span!("INSERT user_access_token"))
     .await
     .inspect_err(|e| error!("database error occured: {e:?}"))?;
 
@@ -224,13 +233,18 @@ pub async fn redirect(
             iat
         )
         .execute(&mut *tx)
+        .instrument(info_span!("INSERT user_refresh_token"))
         .await
         .inspect_err(|e| error!("database error inserting user refresh token: {e}"))?;
     }
 
-    tx.commit().await?;
+    tx.commit()
+        .instrument(info_span!("COMMIT"))
+        .await?;
+
     session
         .remove::<OAuthExchangeData>(OAuthExchangeData::SESSION_KEY)
+        .instrument(info_span!("Session Remove"))
         .await
         .inspect_err(|e| error!("session error removing oauth exchange data {e}"))?;
 
@@ -276,6 +290,7 @@ pub async fn login(
                 csrf: csrf_token.into_secret(),
             },
         )
+        .instrument(info_span!("Session Insert"))
         .await
         .inspect_err(|e| error!("failed to insert oauth session data {e}"))?;
 

@@ -46,6 +46,7 @@ pub async fn login(
                 csrf: csrf_token.into_secret(),
             },
         )
+        .instrument(info_span!("Session insert"))
         .await?;
 
     Ok(Redirect::to(authorize_url.as_ref()))
@@ -65,13 +66,13 @@ pub async fn redirect(
 ) -> Result<Response, AppError> {
     let client = get_ms_oauth2_client(&app_state.config);
 
-    let Some(user_id): Option<UserID> = session.get(UserID::SESSION_KEY).await? else {
+    let Some(user_id): Option<UserID> = session.get(UserID::SESSION_KEY).instrument(info_span!("Session Lookup")).await? else {
         return Ok(response::Redirect::to("/login").into_response());
     };
 
     let Some(code) = code else {
         if let Some(e) = error {
-            warn!("error occured with msgraph sign in: {e}");
+            info!("error occured with msgraph sign in: {e}");
         }
         return Ok(Redirect::to("/").into_response());
     };
@@ -79,6 +80,7 @@ pub async fn redirect(
     // should add logging here
     let exchange_data = session
         .get::<MSOAuthExchangeData>(MSOAuthExchangeData::SESSION_KEY)
+        .instrument(info_span!("Session Lookup"))
         .await
         .inspect_err(|e| error!("session error occured while getting oauth exchange data {e:?}"))?
         .ok_or(AppError::NoOauthExchangeDataInSession)?;
@@ -96,6 +98,7 @@ pub async fn redirect(
         .exchange_code(AuthorizationCode::new(code))
         .set_pkce_verifier(pkce)
         .request_async(&crate::ReqwestClient(app_state.http_client.clone()))
+        .instrument(info_span!("Microsoft OAuth Exchange"))
         .await
         .inspect_err(|e| error!("error occured while exchaging token: {e:?}"))?;
 
@@ -118,6 +121,7 @@ pub async fn redirect(
     let mut tx = app_state
         .pool
         .begin()
+        .instrument(info_span!("BEGIN"))
         .await
         .inspect_err(|e| error!("Error starting transaction {e:?}"))?;
 
@@ -132,12 +136,14 @@ pub async fn redirect(
     .inspect_err(|e| error!("Failed to update minecraft profile: {e}"))?;
 
     tx.commit()
+        .instrument(info_span!("COMMIT"))
         .await
         .inspect_err(|e| error!("Failed to commit to database: {e:?}"))?;
 
     //query
     let _ = session
         .remove::<MSOAuthExchangeData>(MSOAuthExchangeData::SESSION_KEY)
+        .instrument(info_span!("Session Remove"))
         .await
         .inspect_err(|e| error!("failed to remove ms oauth exchange data from session {e}"))?;
 

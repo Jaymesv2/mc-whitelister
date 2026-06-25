@@ -92,20 +92,22 @@ pub async fn index(
     State(state): State<Arc<AppState>>,
 ) -> Result<Response, AppError> {
     info!("index");
+
     let Some(user_id): Option<UserID> = session.get(UserID::SESSION_KEY).await? else {
         return Ok(response::Redirect::to("/login").into_response());
     };
 
-    let mut conn = state.pool.acquire().await?;
+    let mut conn = state.pool.acquire().instrument(info_span!("ACQUIRE")).await?;
 
     let account = match query_as!(User, "SELECT * FROM users WHERE id = $1", user_id.0)
         .fetch_one(&mut *conn)
+        .instrument(info_span!("SELECT users"))
         .await
     {
         Ok(account) => account,
         Err(sqlx::Error::RowNotFound) => {
-            warn!("user account row not found");
-            session.clear().await;
+            info!("user account row not found");
+            session.clear().instrument(info_span!("Session Clear")).await;
             return Ok(axum::response::Redirect::temporary("/login").into_response());
         }
         Err(e) => {
@@ -120,6 +122,7 @@ pub async fn index(
             user_id.0
         )
         .fetch_all(&mut *conn)
+        .instrument(info_span!("Select minecraft_profile"))
         .await
         .inspect_err(|e| error!("Failed to get user accounts: {e}"))
         ?;

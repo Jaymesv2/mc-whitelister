@@ -118,7 +118,7 @@ pub async fn update_mc_profile_from_ms_token(
         skin.variant,
         skin.alias,
         user_id
-    ).execute(conn).await?;
+    ).execute(conn).instrument(info_span!("INSERT minecraft_profile")).await?;
     info!("inserted into mc profile");
 
     Ok(mc_profile)
@@ -164,6 +164,7 @@ pub async fn get_xbox_token(
             "TokenType": "JWT"
         }))
         .send()
+        .instrument(info_span!("POST https://user.auth.xboxlive.com/user/authenticate"))
         .await?;
 
     match res.status() {
@@ -208,6 +209,7 @@ async fn get_xsts_token(
             "TokenType": "JWT"
         }))
         .send()
+        .instrument(info_span!("POST https://xsts.auth.xboxlive.com/xsts/authorize"))
         .await?;
 
     match res.status() {
@@ -268,6 +270,7 @@ async fn get_minecraft_token(
                 )
         }))
         .send()
+        .instrument(info_span!("POST https://api.minecraftservices.com/authentication/login_with_xbox"))
         .await?;
 
     match res.status() {
@@ -294,6 +297,7 @@ async fn get_minecraft_profile(
         .get("https://api.minecraftservices.com/minecraft/profile")
         .bearer_auth(minecraft_access_token)
         .send()
+        .instrument(info_span!("GET https://api.minecraftservices.com/minecraft/profile"))
         .await?;
 
     match res.status() {

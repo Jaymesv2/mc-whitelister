@@ -83,8 +83,9 @@ pub enum ReconcileErrors {
     LPGetUsersError(#[from] luckperms_api::apis::Error<GetUsersError>),
 }
 
+#[instrument(skip_all)]
 pub async fn reconcile_luckperms(state: &Arc<AppState>) -> Result<(), ReconcileErrors> {
-    let mut conn = state.pool.acquire().await?;
+    let mut conn = state.pool.acquire().instrument(info_span!("ACQUIRE")).await?;
 
     let agroups: Vec<AuthentikGroup> = get_authentik_groups(state).await?; //.unwrap();
     let lgroups = groups_api::get_groups(&state.luckperms).await?; //.unwrap();
@@ -116,6 +117,7 @@ pub async fn reconcile_luckperms(state: &Arc<AppState>) -> Result<(), ReconcileE
                     name: agroup.data.name.clone(),
                 }),
             )
+            // .instrument(info_span!("POST /group"))
             .await?;
         }
     }
@@ -139,6 +141,7 @@ pub async fn reconcile_luckperms(state: &Arc<AppState>) -> Result<(), ReconcileE
         "SELECT user_id, username, uuid FROM minecraft_profile"
     )
     .fetch_all(&mut *conn)
+    .instrument(info_span!("SELECT minecraft_profile"))
     .await?;
 
     let mut authentik_uid_uuid_mapping: HashMap<String, Vec<ResponseAccount>> = HashMap::new();
@@ -189,7 +192,7 @@ pub async fn reconcile_luckperms(state: &Arc<AppState>) -> Result<(), ReconcileE
         let user_uuid: String = format!("{}", account.uuid.hyphenated());
         let user_data = users_api::get_user(&state.luckperms, &user_uuid).await?;
 
-        info!("data for {}: {:?}", account.username, user_data);
+        // info!("data for {}: {:?}", account.username, user_data);
 
         // SEMANTICS
         // If a user has groups that are defined in authentik but they don't have in authentik they
