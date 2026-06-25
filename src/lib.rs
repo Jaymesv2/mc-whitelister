@@ -91,7 +91,7 @@ impl IntoResponse for AppError {
             AppError::Session(err) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{err}")),
             AppError::NoOauthExchangeDataInSession => (
                 StatusCode::FORBIDDEN,
-                format!("No oauth exchange data was present in your session"),
+                "No oauth exchange data was present in your session".to_string(),
             ),
             AppError::InvalidCSRFToken => (
                 StatusCode::FORBIDDEN,

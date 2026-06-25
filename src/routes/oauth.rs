@@ -107,7 +107,7 @@ pub async fn redirect(
     info!("serving request with session id: {:?}", session.id());
     let exchange_data = session
         .get::<OAuthExchangeData>(OAuthExchangeData::SESSION_KEY)
-        .await ?
+        .await?
         .ok_or(AppError::NoOauthExchangeDataInSession)?;
 
     if exchange_data.csrf != state {
@@ -122,7 +122,6 @@ pub async fn redirect(
         .request_async(&crate::ReqwestClient(app_state.http_client.clone()))
         .await
         .inspect_err(|e| error!("Oauth token exchange error {e}"))?;
-
 
     // #[derive(Debug, Serialize, Deserialize)]
     // struct MsClaims { }
@@ -147,7 +146,7 @@ pub async fn redirect(
     let subject = token_contents
         .registered
         .subject
-        .ok_or(AppError::InvalidAuthentikToken("subject was missing")) ?;
+        .ok_or(AppError::InvalidAuthentikToken("subject was missing"))?;
 
     let username = token_contents
         .private
@@ -179,7 +178,11 @@ pub async fn redirect(
         .insert(UserID::SESSION_KEY, UserID(subject.clone()))
         .await?;
 
-    let mut tx = app_state.pool.begin().await.inspect_err(|e| error!("failed to start transaction: {e:?}"))?;
+    let mut tx = app_state
+        .pool
+        .begin()
+        .await
+        .inspect_err(|e| error!("failed to start transaction: {e:?}"))?;
 
     let user_query = query_as!(db::User, "SELECT * FROM users WHERE id = $1", subject)
         .fetch_optional(&mut *tx)
@@ -189,7 +192,7 @@ pub async fn redirect(
     // detect if this is a login or a new account
     let new_account = user_query.is_none();
 
-    if !user_query.is_some_and(|s| s.name == username) {
+    if user_query.is_none_or(|s| s.name != username) {
         query!(
             "INSERT INTO users(id, name) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET name=$2;",
             subject,
@@ -265,7 +268,7 @@ pub async fn login(
         builder.set_pkce_challenge(pkce_challenge).url()
     };
     // let Ok(_) =
-    let _ = session
+    session
         .insert(
             OAuthExchangeData::SESSION_KEY,
             OAuthExchangeData {

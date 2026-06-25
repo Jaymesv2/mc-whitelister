@@ -105,7 +105,6 @@ pub async fn redirect(
     let contents: biscuit::JWT<MsClaims, MsClaims> =
         biscuit::JWT::new_encoded(&token.extra_fields().id_token);
 
-
     let id_contents: biscuit::ClaimsSet<MsClaims> = contents
         .unverified_payload()
         .expect("failed to unwrap content");
@@ -116,7 +115,10 @@ pub async fn redirect(
         .subject
         .expect("microsoft did not provide subject in id token");
 
-    let mut tx = app_state.pool.begin().await
+    let mut tx = app_state
+        .pool
+        .begin()
+        .await
         .inspect_err(|e| error!("Error starting transaction {e:?}"))?;
 
     update_mc_profile_from_ms_token(
@@ -129,7 +131,9 @@ pub async fn redirect(
     .await
     .inspect_err(|e| error!("Failed to update minecraft profile: {e}"))?;
 
-    tx.commit().await.inspect_err(|e| error!("Failed to commit to database: {e:?}"))?;
+    tx.commit()
+        .await
+        .inspect_err(|e| error!("Failed to commit to database: {e:?}"))?;
 
     //query
     let _ = session
@@ -145,4 +149,3 @@ pub async fn redirect(
 
     Ok(response::Redirect::to("/").into_response())
 }
-

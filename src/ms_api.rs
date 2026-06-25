@@ -215,7 +215,7 @@ async fn get_xsts_token(
             models::XBLResponse::Success(s) => Ok((
                 s.display_claims
                     .xui
-                    .get(0)
+                    .first()
                     .expect("failed to get xui")
                     .uhs
                     .clone(),

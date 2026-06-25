@@ -20,6 +20,6 @@ pub async fn reconcile(
             .expect("reconcile request could not be sent when reconcile task is died");
         Ok(String::from("Ok").into_response())
     } else {
-        return Err(StatusCode::FORBIDDEN);
+        Err(StatusCode::FORBIDDEN)
     }
 }

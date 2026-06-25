@@ -1,16 +1,15 @@
+use crate::session::*;
+use crate::{db::*, *};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Redirect, Response},
 };
-use crate::session::*;
-use crate::{db::*, *};
 use serde::*;
 use sqlx::{query, query_as};
 use std::sync::Arc;
-use tracing::*;
 use tower_sessions::Session;
-
+use tracing::*;
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct RemoveBody {
@@ -32,8 +31,9 @@ pub async fn remove(
         return Ok(Redirect::to("/").into_response());
     };
 
-    let mut tx = 
-        app_state.pool.begin()
+    let mut tx = app_state
+        .pool
+        .begin()
         .await
         .inspect_err(|e| error!("failed to start transaction: {e}"))
         .map_err(|_e| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -65,7 +65,9 @@ pub async fn remove(
     .inspect_err(|e| error!("error occurd while executing sql: {e}"))
     .map_err(|_e| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    tx.commit().await.inspect_err(|e| error!("error occured while executing sql: {e}"))
+    tx.commit()
+        .await
+        .inspect_err(|e| error!("error occured while executing sql: {e}"))
         .map_err(|_e| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(axum::response::Html("").into_response())

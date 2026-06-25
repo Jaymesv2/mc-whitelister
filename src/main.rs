@@ -146,7 +146,7 @@ async fn main() {
             let mut cfg = luckperms_api::apis::configuration::Configuration::new();
             cfg.bearer_access_token = Some(config.luckperms_api_key.clone());
             cfg.base_path = config.luckperms_server.clone();
-            cfg.client = http_client.clone().into();
+            cfg.client = http_client.clone();
             cfg
         },
         authentik: {
@@ -205,7 +205,7 @@ async fn main() {
         .route("/reconcile", get(routes::reconcile::reconcile))
         .nest("/static", static_router)
         .layer(session_layer)
-        .layer(OtelInResponseLayer::default()) // inject trace context into responses
+        .layer(OtelInResponseLayer) // inject trace context into responses
         .layer(OtelAxumLayer::default()) // start the span on incoming request
         .with_state(state);
 
@@ -226,7 +226,6 @@ async fn main() {
 
     deletion_task.await.unwrap().unwrap();
     reconcile_task.await.unwrap();
-
 }
 use tokio::task::AbortHandle;
 

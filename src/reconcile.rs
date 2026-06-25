@@ -35,7 +35,7 @@ pub async fn reconcile_task(state: Arc<AppState>, mut rx: Receiver<Option<tracin
             // set this spans follows from since it was requested
             Ok(Some(span_id)) => {
                 tracing::span::Span::current().follows_from(span_id);
-            },
+            }
         }
         let res = reconcile_luckperms(&state).await;
         if let Err(e) = res {
@@ -340,9 +340,9 @@ struct AuthentikLuckpermsGroupAttribute {
     nodes: Vec<AuthentikLuckpermsNode>,
 }
 
-impl Into<Vec<luckperms_api::models::new_node::NewNode>> for AuthentikLuckpermsGroupAttribute {
-    fn into(self) -> Vec<luckperms_api::models::new_node::NewNode> {
-        self.nodes
+impl From<AuthentikLuckpermsGroupAttribute> for Vec<luckperms_api::models::new_node::NewNode> {
+    fn from(val: AuthentikLuckpermsGroupAttribute) -> Self {
+        val.nodes
             .into_iter()
             .map(|x| luckperms_api::models::new_node::NewNode {
                 key: x.key,
@@ -364,7 +364,6 @@ impl Into<Vec<luckperms_api::models::new_node::NewNode>> for AuthentikLuckpermsG
 #[derive(Debug, Clone, Deserialize)]
 struct AuthentikLuckpermsNode {
     key: String,
-    // r#type: String,
     value: bool,
     context: Option<Vec<AuthentikLuckpermsContext>>,
 }
