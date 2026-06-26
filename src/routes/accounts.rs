@@ -22,6 +22,7 @@ pub async fn remove(
     State(app_state): State<Arc<AppState>>,
     Path(uuid): Path<String>,
 ) -> Result<Response, StatusCode> {
+
     let Some(user_id): Option<UserID> = session
         .get(UserID::SESSION_KEY)
         .instrument(info_span!("Session Lookup"))

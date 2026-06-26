@@ -25,7 +25,7 @@ opentelemetry =  "0.32"
 opentelemetry_sdk = "0.32"
 opentelemetry-http = "0.32.0"
 opentelemetry-otlp = {version = "0.32", default-features = false, features = ["internal-logs", "logs", "metrics", "trace", "grpc-tonic"]}
-opentelemetry-semantic-conventions = "0.32"
+opentelemetry-semantic-conventions = {version = "0.32", features = ["semconv_experimental"]}
 
 tower = "0.5"
 # redis = {version = "1.2", features = ["aio", "tokio-comp"]}
@@ -42,11 +42,6 @@ tower-sessions-sqlx-store = {version = "0.15", features = ["postgres"]}
 luckperms_api = {path = "./luckperms_api", default-features = false, features = ["rustls"]}
 authentik-client = {version = "2026.2.1",  default-features = false, features = ["rustls"]}
 
-# axum_session = { version = "0.19" }
-# axum_session_sqlx = {version = "0.8", features = ["postgres", "tls-rustls"]}
-# async-sqlx-sessions = {version = "0.4", features = ["pg"]}
-# async-redis-session = "0.2"
-# axum-sessions = "0.6"
 reqwest = {version = "0.13", default-features = false, features = [ "charset",  "http2", "system-proxy", "json", "multipart", "rustls" ] }
 reqwest-tracing = {version = "0.7", features = ["opentelemetry_0_32"]}
 reqwest-middleware = "0.5"

@@ -29,7 +29,7 @@ use opentelemetry_otlp::ExporterBuildError;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 use opentelemetry::trace::TracerProvider as _;
-use opentelemetry_sdk::{propagation::TraceContextPropagator, trace::SdkTracerProvider};
+use opentelemetry_sdk::{propagation::TraceContextPropagator, trace::SdkTracerProvider, metrics::SdkMeterProvider};
 // use tracing::{error, span};
 use tracing_subscriber::layer::SubscriberExt;
 use opentelemetry_http::HeaderExtractor;
@@ -39,26 +39,49 @@ use opentelemetry_http::HeaderExtractor;
 
 use tower_http::trace::TraceLayer;
 use tracing::{info_span, field};
+
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
+
+
+// use tracing::Span;
+
+
+
 async fn setup_telemetry() -> Result<(), ExporterBuildError> {
-    let otlp_exporter = opentelemetry_otlp::SpanExporter::builder()
+    let resource = opentelemetry_sdk::Resource::builder().build();
+
+    let otlp_metric_exporter = opentelemetry_otlp::MetricExporter::builder()
+        .with_tonic()
+        .build()?;
+
+    let otlp_trace_exporter = opentelemetry_otlp::SpanExporter::builder()
         .with_tonic()
         .build()?;
     // .expect("failed to create otlp span exporter");
 
+
+    let meter_provider = SdkMeterProvider::builder()
+         .with_periodic_exporter(otlp_metric_exporter)
+        .with_resource(resource.clone())
+        .build();
+
     // Create a new OpenTelemetry trace pipeline that prints to stdout
     let tracer_provider = SdkTracerProvider::builder()
-        .with_batch_exporter(otlp_exporter) // was: with_simple_exporter
+        .with_batch_exporter(otlp_trace_exporter) // was: with_simple_exporter
+        .with_resource(resource)
         // .with_resource(Resource::builder().with_service_name("example").build())
         .build();
+
 
     let tracer = tracer_provider.tracer("example");
 
     global::set_tracer_provider(tracer_provider);
 
-    // what does this do??
     global::set_text_map_propagator(TraceContextPropagator::new());
+
+    global::set_meter_provider(meter_provider.clone());
+    // what does this do??
 
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 
@@ -77,6 +100,8 @@ async fn setup_telemetry() -> Result<(), ExporterBuildError> {
         .init();
     Ok(())
 }
+
+
 
 #[tokio::main]
 async fn main() {
@@ -158,7 +183,6 @@ async fn main() {
         .build();
 
 
-    // TODO: set the reqwest client in  both api clients to remove duplication
     let state = Arc::new(AppState {
         luckperms: {
             let mut cfg = luckperms_api::apis::configuration::Configuration::new();
@@ -180,6 +204,7 @@ async fn main() {
         config,
         http_client: traced_http_client,
         pool,
+        metrics: crate::Metrics::new(global::meter("mc-website")),
     });
 
     let reconcile_task = tokio::spawn(reconcile::reconcile_task(state.clone(), rx));
@@ -193,7 +218,6 @@ async fn main() {
                 .body(axum::body::Body::from(cfg_select! {
                     debug_assertions => std::fs::read_to_string(concat!("./static/", $path)).expect(concat!("Failed to read \"./static/", $path, "\"")),
                     _ => include_str!(concat!("../static/", $path)),
-
                 }))
                 .expect("failed to build response")
         }
@@ -216,6 +240,7 @@ async fn main() {
             http.route = %route,
             http.response.status_code = field::Empty,
         );
+
         // dynamic, low-cardinality span name like "GET /reconcile/{id}"
         span.record("otel.name", format!("{} {}", req.method(), route).as_str());
 
@@ -223,6 +248,7 @@ async fn main() {
         let parent = global::get_text_map_propagator(|prop| {
             prop.extract(&HeaderExtractor(req.headers()))
         });
+        
         span.set_parent(parent);
 
         span
@@ -232,9 +258,10 @@ async fn main() {
         if res.status().is_server_error() {
             span.record("otel.status_code", "ERROR"); // marks the OTel span status as error
         }
-    })
-    ;
+    });
 
+
+    
     let static_router = Router::new()
         .route(
             "/scripts.js",
@@ -261,6 +288,7 @@ async fn main() {
         .route("/reconcile", get(routes::reconcile::reconcile))
         .nest("/static", static_router)
         .layer(session_layer)
+        .layer(axum::middleware::from_fn_with_state(state.clone(), crate::metrics_layer))
         .layer(trace_layer)
         .with_state(state);
 

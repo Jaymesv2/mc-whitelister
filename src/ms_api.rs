@@ -109,6 +109,7 @@ pub async fn update_mc_profile_from_ms_token(
         .iter()
         .find(|x| x.state == "ACTIVE")
         .unwrap(); // fix
+
     query!(
         "INSERT INTO minecraft_profile (microsoft_id, uuid, username, skin_id, skin_url, skin_variant, skin_alias, user_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (microsoft_id) DO UPDATE SET uuid=$2, username=$3, skin_id=$4,skin_url=$5,skin_variant=$6,skin_alias=$7;",
         microsoft_id,
@@ -120,6 +121,7 @@ pub async fn update_mc_profile_from_ms_token(
         skin.alias,
         user_id
     ).execute(conn).instrument(info_span!("INSERT minecraft_profile")).await?;
+
     info!("inserted into mc profile");
 
     Ok(mc_profile)
