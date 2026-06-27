@@ -10,6 +10,10 @@ edition = "2024"
 resolver = "3"
 members = ["luckperms_api"]
 
+[build-dependencies]
+yaml_serde = "0.10"
+serde = "1"
+
 [dependencies]
 tokio = {version = "1", features = ["full"]}
 axum = {version = "0.8", features = ["macros", "multipart", "tracing", "http2"]}
@@ -68,3 +72,5 @@ serde_path_to_error = "0.1"
 
 # axum-tracing-opentelemetry = "0.38.0"
 backoff = {version = "0.4.0", features = ["tokio"]}
+async-trait = "0.1.89"
+constcat = "0.6.1"

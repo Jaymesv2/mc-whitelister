@@ -119,6 +119,8 @@ impl IntoResponse for AppError {
     }
 }
 
+
+/// A wrapper around the reqwest client since the oauth2 crate uses an outdated version of reqwest.
 pub struct ReqwestClient(pub reqwest_middleware::ClientWithMiddleware);
 
 impl<'c> oauth2::AsyncHttpClient<'c> for ReqwestClient {

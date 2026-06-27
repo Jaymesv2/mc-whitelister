@@ -170,15 +170,21 @@ async fn main() {
         .with_same_site(SameSite::None)
         .with_signed(Key::from(secret.as_slice()));
 
+    // this could be a concurrency issue, if there are too many reconcile requests this could
+    // bottleneck
     let (tx, rx) = tokio::sync::mpsc::channel(10);
+
+    let meter = global::meter("mc-website");
 
     let http_client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .expect("failed to build requesst http client");
 
-
+    let known_paths: reqwest_tracing::OtelPathNames = reqwest_tracing::OtelPathNames::known_paths( crate::client_middleware::ALL_PATHS.iter().copied()).expect("Failed to setup client tracing paths");
     let traced_http_client = ClientBuilder::new(http_client.clone())
+        .with_init(reqwest_middleware::Extension(known_paths))
+        .with(crate::client_middleware::MetricsMiddleware::new(meter.clone()))
         .with(TracingMiddleware::default())
         .build();
 
@@ -204,7 +210,7 @@ async fn main() {
         config,
         http_client: traced_http_client,
         pool,
-        metrics: crate::Metrics::new(global::meter("mc-website")),
+        metrics: crate::Metrics::new(meter),
     });
 
     let reconcile_task = tokio::spawn(reconcile::reconcile_task(state.clone(), rx));
