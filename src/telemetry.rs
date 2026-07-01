@@ -6,7 +6,7 @@ use axum::{
     extract::MatchedPath
 };
 
-use opentelemetry::metrics::{Meter, Histogram, UpDownCounter};
+use opentelemetry::metrics::{Meter, Counter, Histogram, UpDownCounter};
 use std::{time::Instant, sync::Arc};
 use tracing::Span;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
@@ -42,33 +42,51 @@ pub fn with_exemplar<R>(f: impl FnOnce() -> R) -> R {
     f()
 }
 
+
 #[derive(Debug)]
 pub struct Metrics {
-    pub http_req_duration: Histogram<f64>,   
-    pub http_active_requests: UpDownCounter<i64>,
-    pub http_request_body_size: Histogram<u64>,
-    pub http_response_body_size: Histogram<u64>,
-
+    pub http_server: HttpServerMetrics,
+    pub permission_sync_entities: Counter<u64>,
 }
 
+#[derive(Debug)]
+pub struct HttpServerMetrics {
+    pub request_duration: Histogram<f64>,   
+    pub active_requests: UpDownCounter<i64>,
+    pub request_body_size: Histogram<u64>,
+    pub response_body_size: Histogram<u64>,
+}
 impl Metrics {
     pub fn new(meter: Meter) -> Self {
         Self {
-            http_req_duration: meter
+            http_server: HttpServerMetrics::new(meter.clone()),
+            permission_sync_entities: meter
+                .u64_counter("permission.sync.entities")
+                .with_unit("{entity}")
+                .build(),
+        }
+    }
+}
+
+
+impl HttpServerMetrics {
+    pub fn new(meter: Meter) -> Self {
+        Self {
+            request_duration: meter
                 .f64_histogram(HTTP_SERVER_REQUEST_DURATION)
                 .with_unit("s")
                 // explicit latency buckets — the thing the MetricsLayer couldn't give you
                 .with_boundaries(vec![0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0])
                 .build(),
-            http_active_requests: meter
+            active_requests: meter
                 .i64_up_down_counter(HTTP_SERVER_ACTIVE_REQUESTS)
                 // .with_unit("")
                 .build(),
-            http_request_body_size: meter
+            request_body_size: meter
                 .u64_histogram(HTTP_SERVER_REQUEST_BODY_SIZE)
                 .with_unit("by")
                 .build(),
-            http_response_body_size: meter
+            response_body_size: meter
                 .u64_histogram(HTTP_SERVER_RESPONSE_BODY_SIZE)
                 .with_unit("by")
                 .build()
@@ -102,7 +120,7 @@ pub async fn metrics_layer(
     next: Next
 ) -> axum::response::Response {
     let scheme_str = req.uri().scheme_str().unwrap_or("http").to_string();
-    let _inflight = InFlightGuard::new(state.metrics.http_active_requests.clone(), req.method().as_str(), &scheme_str);
+    let _inflight = InFlightGuard::new(state.metrics.http_server.active_requests.clone(), req.method().as_str(), &scheme_str);
 
     let method = req.method().to_string();
     let route = req.extensions().get::<MatchedPath>()
@@ -140,12 +158,12 @@ pub async fn metrics_layer(
     };
 
     with_exemplar(|| {
-        state.metrics.http_req_duration.record(start.elapsed().as_secs_f64(), &attrs);
+        state.metrics.http_server.request_duration.record(start.elapsed().as_secs_f64(), &attrs);
         if let Some(n) = req_size {
-            state.metrics.http_request_body_size.record(n, &attrs);
+            state.metrics.http_server.request_body_size.record(n, &attrs);
         }
         if let Some(n) = res.headers().get(CONTENT_LENGTH).and_then(|s| s.to_str().ok()).and_then(|s| s.parse().ok()) {
-            state.metrics.http_response_body_size.record(n, &attrs);
+            state.metrics.http_server.response_body_size.record(n, &attrs);
         }
     });
     res

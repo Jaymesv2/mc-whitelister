@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
 
+use opentelemetry::KeyValue;
 use authentik_client::apis::core_api::CoreGroupsListError;
 use luckperms_api::apis::groups_api::{
     AddGroupNodesError, CreateGroupError, GetGroupsError, SetGroupNodesError,
@@ -102,6 +103,9 @@ pub async fn reconcile_luckperms(state: &Arc<AppState>) -> Result<(), ReconcileE
         }
         acc
     };
+    /*
+    permission.sync.entities
+    */  
 
     // ensure all of the groups exist
     // I think this is O(n^2) but i'm too lazy to make it O(n*log(n))
@@ -128,12 +132,24 @@ pub async fn reconcile_luckperms(state: &Arc<AppState>) -> Result<(), ReconcileE
             "setting group permissions for authentik group {} named {}",
             agroup.name, agroup.data.name
         );
-        groups_api::set_group_nodes(
+        match groups_api::set_group_nodes(
             &state.luckperms,
             &agroup.data.name,
             Some(agroup.data.clone().into()),
         )
-        .await?;
+        .await {
+            Ok(_) => state.metrics.permission_sync_entities.add(1, &[
+                KeyValue::new("entity.type", "group"),
+                KeyValue::new("status", "success")
+            ]),
+            Err(e) => {
+                state.metrics.permission_sync_entities.add(1, &[
+                    KeyValue::new("entity.type", "group"),
+                    KeyValue::new("status", "failure"),
+                ]);
+                return Err(e.into());
+            }
+        };
     }
 
     let accounts: Vec<Account> = sqlx::query_as!(
